@@ -1,6 +1,5 @@
 from libraries import *
 
-
 # Class to define the double convolution for the UNet.
 # After each 2D convolution we have a batch normalization and a ReLU activation function
 # The size for the convolution is 3x3 with 1 padding to get the same dimension
