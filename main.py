@@ -17,21 +17,16 @@ from libraries import *
 tags = {"building": True, "highway": True}
 gdf = ox.features_from_xml("map.osm", tags=tags)
 
-# Filter by feature
-buildings = gdf[gdf["building"].notnull()]
-roads = gdf[gdf["highway"].notnull()]
+print(gdf.keys())
 
-fig, ax = plt.subplots(figsize=(12, 12))
+fig, ax = plt.subplots(figsize=(6, 6))
 
-# Plot roads in red
-roads.plot(ax=ax, color="red", linewidth=1, label="Roads")
+for feat in gdf.keys():
+    color = '#%06x' % random.randint(0, 0xFFFFFF)
+    feature = gdf[gdf[f'{feat}'].notnull()]
+    feature.plot(ax=ax, color=color, linewidth=1, label=f"{feat}")
 
-# Plot buildings in gray
-buildings.plot(ax=ax, color="gray", edgecolor="black", linewidth=0.3, label="Buildings")
-
-# Optional: make it pretty
 plt.legend()
 plt.axis("off")
-plt.title("OSM Features: Naples")
-plt.savefig("naples_map_colored.png", dpi=300, bbox_inches="tight", pad_inches=0)
+plt.savefig("map_colored.png", dpi=300, bbox_inches="tight", pad_inches=0)
 plt.show()
