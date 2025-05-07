@@ -3,9 +3,9 @@ import geopandas as gpd
 from shapely.geometry import Polygon
 from PIL import Image, ImageDraw
 
-def rasterize_buildings(buildings_gdf, bounds, out_size=(512, 512)): # I need to rasterize buildings to create an image from osm files
-    minx, miny, maxx, maxy = bounds
-    w, h = out_size
+def rasterize_buildings(buildings_gdf, bounds, out_size=(512, 512)):    # I need to rasterize buildings to create an image from osm files
+    minx, miny, maxx, maxy = bounds                                     # the bounds of the actual image, the input size, basically
+    w, h = out_size                                                     # the size the new image must have
     mask = Image.new("L", (w, h), 0)
     draw = ImageDraw.Draw(mask)
 
@@ -15,7 +15,7 @@ def rasterize_buildings(buildings_gdf, bounds, out_size=(512, 512)): # I need to
         try:
             coords = [(int((x - minx) / (maxx - minx) * w),
                        int((1 - (y - miny) / (maxy - miny)) * h)) for x, y in geom.exterior.coords]
-            draw.polygon(coords, outline=1, fill=1)
+            draw.polygon(coords, outline=1, fill=255)
         except Exception as e:
             print(f"Skipping geometry due to error: {e}")
 
@@ -36,7 +36,7 @@ def process_geojson_folder(input_folder, output_folder, out_size=(512, 512)):
                     print(f"No buildings found in {filename}")
                     continue
 
-                bounds = gdf.total_bounds
+                bounds = buildings.total_bounds
                 mask = rasterize_buildings(buildings, bounds, out_size=out_size)
 
                 out_name = os.path.splitext(filename)[0] + "_mask.png"
