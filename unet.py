@@ -1,4 +1,3 @@
-""" Full assembly of the parts to form the complete network """
 
 from libraries import *
 from .unet_architecture import *
