@@ -34,4 +34,4 @@ with rasterio.open(f"georef/{fileName}_georef.tif") as src:
         dest.write(out_image)
 plt.imshow(out_image[0], cmap='gray')
 plt.show()
-print("✅ Raster clipped and saved.")
+print("Raster clipped and saved.")
