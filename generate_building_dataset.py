@@ -5,63 +5,88 @@ import contextily as ctx
 from pyproj import Transformer
 
 
-# --- CONFIGURATION ---
+# CONFIGURATION
 output_dir = "dataset"
-image_size = (1024, 1024)  # in pixels
-
 
 # Create folders
 os.makedirs(f"{output_dir}/images", exist_ok=True)
 os.makedirs(f"{output_dir}/masks", exist_ok=True)
+os.makedirs(f"{output_dir}/geojson", exist_ok=True)
+
+transformer = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
 
 
+# Conversion for the satellite map
 def latlon_to_mercator_bbox(south, north, west, east):
-    transformer = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
 
     xmin, ymin = transformer.transform(west, south)
     xmax, ymax = transformer.transform(east, north)
 
     return xmin, ymin, xmax, ymax
 
+# DOWNLOAD MAP IMAGE
+def download_map_tile(latmin, latmax, lonmin, lonmax):
+    print(f'Coordinates:\n{latmin, latmax, lonmin, lonmax}')
+    gdf = ox.features_from_bbox((latmax, latmin, lonmax, lonmin), tags={"building": True})
 
-# --- 1. DOWNLOAD MAP IMAGE (OPTIONAL) ---
-def download_map_tile(bbox, image_size, tile_path):
+    #fig, ax = ox.plot_footprints(gdf=gdf, save=False, show=False, close=True)
+    fig, ax = plt.subplots(figsize=(5.12, 5.12), dpi=100, facecolor='black')  # Black background
+    gdf.plot(ax=ax, color='white', edgecolor='none')  # White buildings
 
-    gdf = ox.features_from_bbox(bbox=(bbox[3], bbox[1], bbox[2], bbox[0]), tags={"building": True})
-    fig, ax = ox.plot_footprints(gdf=gdf, save=False, show=False, close=True)
+    ax.set_axis_off()
+    ax.set_xlim(gdf.total_bounds[[0, 2]])
+    ax.set_ylim(gdf.total_bounds[[1, 3]])
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+    fig.savefig(f'dataset/masks/tile{i}.png', dpi=100, bbox_inches=None, pad_inches=0, facecolor='black')
+    plt.close(fig)
 
-    fig.set_size_inches(image_size[0] / 100, image_size[1] / 100)  # DPI adjustment
-    fig.savefig(tile_path, dpi=100, bbox_inches='tight', pad_inches=0)
+    # Save the GeoDataFrame as a GeoJSON
+    gdf.to_file(f"dataset/geojson/tile{i}.geojson", driver='GeoJSON')
+    fig.set_size_inches(5.12, 5.12)
 
+# DOWNLOAD MAP SATELLITE
 
-def download_map(bbox):
-    bbox = latlon_to_mercator_bbox(*bbox) # in Web Mercator meters
+def download_map(latmin, latmax, lonmin, lonmax, output, zoom=18):
 
-    print(bbox)
-    fig, ax = plt.subplots(figsize=(8, 8))
+    xmin, ymin, xmax, ymax = latlon_to_mercator_bbox(south=latmin,
+                                                     north=latmax,
+                                                     west=lonmin,
+                                                     east=lonmax)
 
-    # Plot empty ax with extent set to bbox
-    ax.set_xlim(bbox[0], bbox[2])
-    ax.set_ylim(bbox[1], bbox[3])
+    print(xmin, ymin, xmax, ymax)
+    print(latmin, latmax, lonmin, lonmax)
 
-    # Add basemap tiles from Esri World Imagery (satellite imagery)
-    ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery)
+    # Compute bounding box for 512x512 pixels at given zoom
+    tile_size = 512
+    res = 156543.03392804097 / (2 ** zoom)
+    half_size = (tile_size // 2) * res
 
-    plt.axis('off')
-    plt.savefig(f'dataset/images/tile{i}.png', bbox_inches='tight', pad_inches=0)
-    plt.close()
+    # Convert center point to mercator
+    img, extent = ctx.bounds2img(xmin, ymin, xmax, ymax, zoom=zoom, source=ctx.providers.Esri.WorldImagery)
 
-
-# Download and save map tiles
+    # Save image
+    plt.imsave(output, img)# Download and save map tiles
 
 for i in range(10):
     map_shift = i*0.01
-    bbox = (40.855+map_shift, 40.859+map_shift, 14.385+map_shift, 14.389+map_shift)  # (south, north, west, east)
-    tile_name = f"tile{i}"
 
-    image_path = f"{output_dir}/masks/{tile_name}.png"
-    download_map_tile(bbox, image_size, image_path)
-    download_map(bbox)
+    tile_dimension = 0.002
+
+    lat = 40.857 + map_shift
+    lon = 14.387 + map_shift
+
+    bbox = (40.855+map_shift, 40.859+map_shift, 14.385+map_shift, 14.389+map_shift)  # (south, north, west, east)
+
+    latmin = lat - tile_dimension
+    latmax = lat + tile_dimension
+    lonmin = lon - tile_dimension
+    lonmax = lon + tile_dimension
+
+
+    print(f'Bounding Box:\n{bbox}\n')
+
+    download_map_tile(latmin=latmin, latmax=latmax, lonmin=lonmin, lonmax=lonmax)
+    #download_map(latmin=latmin, latmax=latmax, lonmin=lonmin, lonmax=lonmax, output=f'dataset/images/tile{i}.png', zoom=18)
 
 
 print("Dataset image and mask saved")
