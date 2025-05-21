@@ -10,7 +10,7 @@ from dataset import MyDataset
 # Initial setup
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 num_epochs = 20
-batch_size = 4
+batch_size = 2
 learning_rate = 1e-4
 georef = False
 
@@ -21,9 +21,9 @@ transform = transforms.Compose([
 
 # Dataset and DataLoader
 if georef:
-    train_dataset = MyDataset(image_dir="dataset/images", mask_dir="dataset/masks", transform=transform)
-else:
     train_dataset = MyDataset(image_dir="dataset/georef", mask_dir="dataset/masks", transform=transform)
+else:
+    train_dataset = MyDataset(image_dir="dataset/images", mask_dir="dataset/masks", transform=transform)
 
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
@@ -43,6 +43,12 @@ for epoch in range(num_epochs):
 
         outputs = model(images)
         loss = criterion(outputs, masks)
+
+        print("Image batch shape:", images.shape)
+        print("Mask batch shape:", masks.shape)
+        print("Output shape:", outputs.shape)
+        print("Loss:", loss.item())
+        break  # Optional: just to test 1 batch
 
         optimizer.zero_grad()
         loss.backward()
