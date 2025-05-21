@@ -1,6 +1,6 @@
 
 from libraries import *
-from .unet_architecture import *
+from unet_architecture import *
 
 
 class UNet(nn.Module):
