@@ -18,8 +18,8 @@ class DoubleConv(nn.Module):
             nn.ReLU(inplace=True)
         )
 
-        def forward(self, x):
-            return self.double_conv(x)
+    def forward(self, x):
+        return self.double_conv(x)
 
 
 # Downsampling using a pooling of 2x2.
