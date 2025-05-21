@@ -6,7 +6,7 @@ class MyDataset(Dataset):
     def __init__(self, image_dir, mask_dir, transform=None):
         self.image_dir = image_dir                              # here I can choose both the georef or the images directory
         self.mask_dir = mask_dir                                # these are the labels of the data
-        self.transform = transform                              # the transfomation for the data augmentation, for example
+        self.transform = transform                              # the transformation for the data augmentation, for example
         self.image_filenames = sorted(os.listdir(image_dir))    # the file names in the directory
 
     def __len__(self):
