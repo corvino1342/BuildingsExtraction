@@ -3,6 +3,8 @@ import osmnx as ox
 import matplotlib.pyplot as plt
 import contextily as ctx
 from pyproj import Transformer
+from PIL import Image
+import numpy as np
 
 
 # CONFIGURATION
@@ -64,10 +66,14 @@ def download_map(latmin, latmax, lonmin, lonmax, output, zoom=18):
     # Convert center point to mercator
     img, extent = ctx.bounds2img(xmin, ymin, xmax, ymax, zoom=zoom, source=ctx.providers.Esri.WorldImagery)
 
+    # Resize to 512×512 if necessary
+    if img.shape[0] != tile_size or img.shape[1] != tile_size:
+        img = np.array(Image.fromarray(img).resize((tile_size, tile_size), resample=Image.BILINEAR))
+
     # Save image
     plt.imsave(output, img)# Download and save map tiles
 
-for i in range(10):
+for i in range(1):
     map_shift = i*0.01
 
     tile_dimension = 0.002
@@ -85,8 +91,8 @@ for i in range(10):
 
     print(f'Bounding Box:\n{bbox}\n')
 
-    download_map_tile(latmin=latmin, latmax=latmax, lonmin=lonmin, lonmax=lonmax)
-    #download_map(latmin=latmin, latmax=latmax, lonmin=lonmin, lonmax=lonmax, output=f'dataset/images/tile{i}.png', zoom=18)
+    #download_map_tile(latmin=latmin, latmax=latmax, lonmin=lonmin, lonmax=lonmax)
+    download_map(latmin=latmin, latmax=latmax, lonmin=lonmin, lonmax=lonmax, output=f'dataset/images/tile{i}.png', zoom=18)
 
 
 print("Dataset image and mask saved")
