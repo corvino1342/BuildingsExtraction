@@ -6,7 +6,8 @@ from pyproj import Transformer
 from PIL import Image
 import numpy as np
 from decimal import Decimal, getcontext      # I need to use it to ensure the correct operations with decimals
-
+from osmnx._errors import InsufficientResponseError
+import geopandas as gpd
 
 getcontext().prec = 9
 # CONFIGURATION
@@ -34,57 +35,60 @@ def latlon_to_mercator_bbox(south, north, west, east):
     return xmin, ymin, xmax, ymax
 
 # DOWNLOAD MAP IMAGE
-def download_map_tile(latmin, latmax, lonmin, lonmax):
+def download_map_tile(latmin, latmax, lonmin, lonmax, extent):
+    xmin, xmax, ymin, ymax = extent
 
+    try:
+        # The right order of coordinates is: west, south, east, north
+        bbox = (float(lonmin), float(latmin), float(lonmax), float(latmax))
+        gdf = ox.features_from_bbox(bbox, tags={"building": True})
 
-    # The right order of coordinates is: west, south, east, north
-    bbox = (float(lonmin), float(latmin), float(lonmax), float(latmax))
+        # Reproject to match extent (Web Mercator)
+        gdf = gdf.to_crs("EPSG:3857")
+        fig, ax = plt.subplots(figsize=(5.12, 5.12), dpi=100, facecolor='black')  # Black background
+        gdf.plot(ax=ax, color='white', edgecolor='none')  # White buildings
 
-    gdf = ox.features_from_bbox(bbox, tags={"building": True})
+        ax.set_axis_off()
+        ax.set_xlim(xmin, xmax)
+        ax.set_ylim(ymin, ymax)
+        fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+        fig.savefig(f'dataset/masks/tile{i}.png', dpi=100, bbox_inches=None, pad_inches=0, facecolor='black')
+        plt.close(fig)
 
-    #fig, ax = ox.plot_footprints(gdf=gdf, save=False, show=False, close=True)
-    fig, ax = plt.subplots(figsize=(5.12, 5.12), dpi=100, facecolor='black')  # Black background
-    gdf.plot(ax=ax, color='white', edgecolor='none')  # White buildings
+        # Save the GeoDataFrame as a GeoJSON
+        gdf.to_file(f"dataset/geojson/tile{i}.geojson", driver='GeoJSON')
+        fig.set_size_inches(5.12, 5.12)
+        skipping_flag = False
 
-    ax.set_axis_off()
-    ax.set_xlim(gdf.total_bounds[[0, 2]])
-    ax.set_ylim(gdf.total_bounds[[1, 3]])
-    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
-    fig.savefig(f'dataset/masks/tile{i}.png', dpi=100, bbox_inches=None, pad_inches=0, facecolor='black')
-    plt.close(fig)
-
-    # Save the GeoDataFrame as a GeoJSON
-    gdf.to_file(f"dataset/geojson/tile{i}.geojson", driver='GeoJSON')
-    fig.set_size_inches(5.12, 5.12)
+    except InsufficientResponseError:
+        print("Empty tile!")
+        skipping_flag = True
+    return skipping_flag
 
 # DOWNLOAD MAP SATELLITE
-def download_map(latmin, latmax, lonmin, lonmax):
+def download_map(extent, skipping_flag):
 
-    zoom = 18
-    xmin, ymin, xmax, ymax = latlon_to_mercator_bbox(south=latmin,
-                                                     north=latmax,
-                                                     west=lonmin,
-                                                     east=lonmax)
+    if not skipping_flag:
+        zoom = 18
+        xmin, xmax, ymin, ymax = extent
 
-    print(xmin, ymin, xmax, ymax)
-    print(latmin, latmax, lonmin, lonmax)
+        # Compute bounding box for 512x512 pixels at given zoom
 
-    # Compute bounding box for 512x512 pixels at given zoom
-    tile_size = 512
+        # Convert center point to mercator
+        img, _ = ctx.bounds2img(xmin, ymin, xmax, ymax, zoom=zoom, source=ctx.providers.Esri.WorldImagery)
+        tile_size = 512
 
-    # Convert center point to mercator
-    img, extent = ctx.bounds2img(xmin, ymin, xmax, ymax, zoom=zoom, source=ctx.providers.Esri.WorldImagery)
+        # Resize to 512×512 if necessary
+        if img.shape[0] != tile_size or img.shape[1] != tile_size:
+            img = np.array(Image.fromarray(img).resize((tile_size, tile_size), resample=Image.BILINEAR))
 
-    # Resize to 512×512 if necessary
-    if img.shape[0] != tile_size or img.shape[1] != tile_size:
-        img = np.array(Image.fromarray(img).resize((tile_size, tile_size), resample=Image.BILINEAR))
+        # Save image
+        plt.imsave(f'dataset/images/tile{i}.png', img)# Download and save map tiles
 
-    # Save image
-    plt.imsave(f'dataset/images/tile{i}.png', img)# Download and save map tiles
-
+# TILE LOOP
 for i in range(dataset_dim):
 
-    print(f'##################\nTILE NUMBER: {i}/{dataset_dim}\n##################\n')
+    print(f'\n##################\nTILE NUMBER: {i}/{dataset_dim}\n##################\n')
 
     map_shift = Decimal(i*0.01)
 
@@ -96,10 +100,13 @@ for i in range(dataset_dim):
     lonwest = lon - half_dimension
     loneast = lon + half_dimension
 
-    print(f'\t\tCOORDINATES\n\t\t\t{latnorth}\t\t\t\n{lonwest}\t\t\t\t\t{loneast}\n\t\t\t{latsouth}\n\n')
+    print(f'\t\tCOORDINATES\n\t\t\t{latnorth}\t\t\t\n{lonwest}\t\t\t\t\t{loneast}\n\t\t\t{latsouth}\n')
+    xmin, ymin, xmax, ymax = latlon_to_mercator_bbox(south=latsouth, north=latnorth, west=lonwest, east=loneast)
 
-    download_map_tile(latmin=latsouth, latmax=latnorth, lonmin=lonwest, lonmax=loneast)
-    download_map(latmin=latsouth, latmax=latnorth, lonmin=lonwest, lonmax=loneast)
+    extent_mercator = (xmin, xmax, ymin, ymax)
+
+    skip = download_map_tile(latmin=latsouth, latmax=latnorth, lonmin=lonwest, lonmax=loneast, extent=extent_mercator)
+    download_map(extent=extent_mercator, skipping_flag=skip)
 
 
 print("Dataset image and mask saved")
