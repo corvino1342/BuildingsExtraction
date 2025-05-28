@@ -12,7 +12,7 @@ import geopandas as gpd
 getcontext().prec = 9
 # CONFIGURATION
 output_dir = "dataset"
-dataset_dim = 30
+dataset_dim = 100
 
 # INITIAL COORDINATES
 base_lat, base_lon = Decimal("40.857"), Decimal("14.387")
