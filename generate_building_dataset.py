@@ -11,17 +11,18 @@ import geopandas as gpd
 
 getcontext().prec = 9
 # CONFIGURATION
-output_dir = "dataset"
-dataset_dim = 100
+dataset_dim = 10
+
+dataset_type = 'test' # training or test
 
 # INITIAL COORDINATES
 base_lat, base_lon = Decimal("40.857"), Decimal("14.387")
 half_dimension = Decimal("0.002")
 
 # Create folders
-os.makedirs(f"{output_dir}/images", exist_ok=True)
-os.makedirs(f"{output_dir}/masks", exist_ok=True)
-os.makedirs(f"{output_dir}/geojson", exist_ok=True)
+os.makedirs(f"dataset/{dataset_type}/images", exist_ok=True)
+os.makedirs(f"dataset/{dataset_type}/masks", exist_ok=True)
+os.makedirs(f"dataset/{dataset_type}/geojson", exist_ok=True)
 
 transformer = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
 
@@ -52,11 +53,11 @@ def download_map_tile(latmin, latmax, lonmin, lonmax, extent):
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
         fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
-        fig.savefig(f'dataset/masks/tile{i}.png', dpi=100, bbox_inches=None, pad_inches=0, facecolor='black')
+        fig.savefig(f'dataset/{dataset_type}/masks/tile{i}.png', dpi=100, bbox_inches=None, pad_inches=0, facecolor='black')
         plt.close(fig)
 
         # Save the GeoDataFrame as a GeoJSON
-        gdf.to_file(f"dataset/geojson/tile{i}.geojson", driver='GeoJSON')
+        gdf.to_file(f"dataset/{dataset_type}/geojson/tile{i}.geojson", driver='GeoJSON')
         fig.set_size_inches(5.12, 5.12)
         skipping_flag = False
 
@@ -83,13 +84,12 @@ def download_map(extent, skipping_flag):
             img = np.array(Image.fromarray(img).resize((tile_size, tile_size), resample=Image.BILINEAR))
 
         # Save image
-        plt.imsave(f'dataset/images/tile{i}.png', img)# Download and save map tiles
+        plt.imsave(f'dataset/{dataset_type}/images/tile{i}.png', img)# Download and save map tiles
 
 # TILE LOOP
 for i in range(dataset_dim):
 
     print(f'\n##################\nTILE NUMBER: {i}/{dataset_dim}\n##################\n')
-
     map_shift = Decimal(i*0.01)
 
     lat = base_lat + map_shift
