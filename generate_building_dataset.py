@@ -5,10 +5,17 @@ import contextily as ctx
 from pyproj import Transformer
 from PIL import Image
 import numpy as np
+from decimal import Decimal, getcontext      # I need to use it to ensure the correct operations with decimals
 
 
+getcontext().prec = 9
 # CONFIGURATION
 output_dir = "dataset"
+dataset_dim = 30
+
+# INITIAL COORDINATES
+base_lat, base_lon = Decimal("40.857"), Decimal("14.387")
+half_dimension = Decimal("0.002")
 
 # Create folders
 os.makedirs(f"{output_dir}/images", exist_ok=True)
@@ -28,8 +35,12 @@ def latlon_to_mercator_bbox(south, north, west, east):
 
 # DOWNLOAD MAP IMAGE
 def download_map_tile(latmin, latmax, lonmin, lonmax):
-    print(f'Coordinates:\n{latmin, latmax, lonmin, lonmax}')
-    gdf = ox.features_from_bbox((latmax, latmin, lonmax, lonmin), tags={"building": True})
+
+
+    # The right order of coordinates is: west, south, east, north
+    bbox = (float(lonmin), float(latmin), float(lonmax), float(latmax))
+
+    gdf = ox.features_from_bbox(bbox, tags={"building": True})
 
     #fig, ax = ox.plot_footprints(gdf=gdf, save=False, show=False, close=True)
     fig, ax = plt.subplots(figsize=(5.12, 5.12), dpi=100, facecolor='black')  # Black background
@@ -47,9 +58,9 @@ def download_map_tile(latmin, latmax, lonmin, lonmax):
     fig.set_size_inches(5.12, 5.12)
 
 # DOWNLOAD MAP SATELLITE
+def download_map(latmin, latmax, lonmin, lonmax):
 
-def download_map(latmin, latmax, lonmin, lonmax, output, zoom=18):
-
+    zoom = 18
     xmin, ymin, xmax, ymax = latlon_to_mercator_bbox(south=latmin,
                                                      north=latmax,
                                                      west=lonmin,
@@ -60,8 +71,6 @@ def download_map(latmin, latmax, lonmin, lonmax, output, zoom=18):
 
     # Compute bounding box for 512x512 pixels at given zoom
     tile_size = 512
-    res = 156543.03392804097 / (2 ** zoom)
-    half_size = (tile_size // 2) * res
 
     # Convert center point to mercator
     img, extent = ctx.bounds2img(xmin, ymin, xmax, ymax, zoom=zoom, source=ctx.providers.Esri.WorldImagery)
@@ -71,28 +80,26 @@ def download_map(latmin, latmax, lonmin, lonmax, output, zoom=18):
         img = np.array(Image.fromarray(img).resize((tile_size, tile_size), resample=Image.BILINEAR))
 
     # Save image
-    plt.imsave(output, img)# Download and save map tiles
+    plt.imsave(f'dataset/images/tile{i}.png', img)# Download and save map tiles
 
-for i in range(1):
-    map_shift = i*0.01
+for i in range(dataset_dim):
 
-    tile_dimension = 0.002
+    print(f'##################\nTILE NUMBER: {i}/{dataset_dim}\n##################\n')
 
-    lat = 40.857 + map_shift
-    lon = 14.387 + map_shift
+    map_shift = Decimal(i*0.01)
 
-    bbox = (40.855+map_shift, 40.859+map_shift, 14.385+map_shift, 14.389+map_shift)  # (south, north, west, east)
+    lat = base_lat + map_shift
+    lon = base_lon + map_shift
 
-    latmin = lat - tile_dimension
-    latmax = lat + tile_dimension
-    lonmin = lon - tile_dimension
-    lonmax = lon + tile_dimension
+    latsouth = lat - half_dimension
+    latnorth = lat + half_dimension
+    lonwest = lon - half_dimension
+    loneast = lon + half_dimension
 
+    print(f'\t\tCOORDINATES\n\t\t\t{latnorth}\t\t\t\n{lonwest}\t\t\t\t\t{loneast}\n\t\t\t{latsouth}\n\n')
 
-    print(f'Bounding Box:\n{bbox}\n')
-
-    #download_map_tile(latmin=latmin, latmax=latmax, lonmin=lonmin, lonmax=lonmax)
-    download_map(latmin=latmin, latmax=latmax, lonmin=lonmin, lonmax=lonmax, output=f'dataset/images/tile{i}.png', zoom=18)
+    download_map_tile(latmin=latsouth, latmax=latnorth, lonmin=lonwest, lonmax=loneast)
+    download_map(latmin=latsouth, latmax=latnorth, lonmin=lonwest, lonmax=loneast)
 
 
 print("Dataset image and mask saved")
