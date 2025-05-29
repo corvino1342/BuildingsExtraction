@@ -11,13 +11,15 @@ import geopandas as gpd
 
 getcontext().prec = 9
 # CONFIGURATION
-dataset_dim = 10
 
-dataset_type = 'test' # training or test
+dataset_type = 'training' # training or test
 
-# INITIAL COORDINATES
-base_lat, base_lon = Decimal("40.857"), Decimal("14.387")
-half_dimension = Decimal("0.002")
+# INITIAL COORDINATES TRAINING
+base_lat, base_lon = Decimal("40.964"), Decimal("14.223")
+
+# INITIAL COORDINATES TRAINING
+# base_lat, base_lon = Decimal("40.546"), Decimal("15.483")
+
 
 # Create folders
 os.makedirs(f"dataset/{dataset_type}/images", exist_ok=True)
@@ -36,7 +38,7 @@ def latlon_to_mercator_bbox(south, north, west, east):
     return xmin, ymin, xmax, ymax
 
 # DOWNLOAD MAP IMAGE
-def download_map_tile(latmin, latmax, lonmin, lonmax, extent):
+def download_map_tile(latmin, latmax, lonmin, lonmax, extent, filename):
     xmin, xmax, ymin, ymax = extent
 
     try:
@@ -53,11 +55,11 @@ def download_map_tile(latmin, latmax, lonmin, lonmax, extent):
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
         fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
-        fig.savefig(f'dataset/{dataset_type}/masks/tile{i}.png', dpi=100, bbox_inches=None, pad_inches=0, facecolor='black')
+        fig.savefig(f'dataset/{dataset_type}/masks/tile-{filename}.png', dpi=100, bbox_inches=None, pad_inches=0, facecolor='black')
         plt.close(fig)
 
         # Save the GeoDataFrame as a GeoJSON
-        gdf.to_file(f"dataset/{dataset_type}/geojson/tile{i}.geojson", driver='GeoJSON')
+        gdf.to_file(f"dataset/{dataset_type}/geojson/tile-{filename}.geojson", driver='GeoJSON')
         fig.set_size_inches(5.12, 5.12)
         skipping_flag = False
 
@@ -67,7 +69,7 @@ def download_map_tile(latmin, latmax, lonmin, lonmax, extent):
     return skipping_flag
 
 # DOWNLOAD MAP SATELLITE
-def download_map(extent, skipping_flag):
+def download_map(extent, skipping_flag, filename):
 
     if not skipping_flag:
         zoom = 18
@@ -84,16 +86,23 @@ def download_map(extent, skipping_flag):
             img = np.array(Image.fromarray(img).resize((tile_size, tile_size), resample=Image.BILINEAR))
 
         # Save image
-        plt.imsave(f'dataset/{dataset_type}/images/tile{i}.png', img)# Download and save map tiles
+        plt.imsave(f'dataset/{dataset_type}/images/tile-{filename}.png', img)# Download and save map tiles
 
 # TILE LOOP
+"""
+dataset_dim = 200
+
 for i in range(dataset_dim):
 
     print(f'\n##################\nTILE NUMBER: {i}/{dataset_dim}\n##################\n')
     map_shift = Decimal(i*0.01)
+    half_dimension = Decimal("0.001")
 
+    # (+ NORTH shift) (- SOUTH shift)
     lat = base_lat + map_shift
-    lon = base_lon + map_shift
+
+    # (+ EAST shift) (- WEST shift)
+    lon = base_lon - map_shift
 
     latsouth = lat - half_dimension
     latnorth = lat + half_dimension
@@ -105,8 +114,47 @@ for i in range(dataset_dim):
 
     extent_mercator = (xmin, xmax, ymin, ymax)
 
-    skip = download_map_tile(latmin=latsouth, latmax=latnorth, lonmin=lonwest, lonmax=loneast, extent=extent_mercator)
-    download_map(extent=extent_mercator, skipping_flag=skip)
+    skip = download_map_tile(latmin=latsouth, latmax=latnorth, lonmin=lonwest, lonmax=loneast, extent=extent_mercator, filename=f'{i}')
+    download_map(extent=extent_mercator, skipping_flag=skip, filename=f'{i}')
+"""
 
+
+# TILE GRID
+rows = 24
+cols = 25
+
+half_dimension = Decimal("0.002")
+
+lat_start = base_lat - (rows // 2) * half_dimension * 2
+lon_start = base_lon - (rows // 2) * half_dimension * 2
+index = 0
+for i in range(rows):
+    for j in range(cols):
+        index += 1
+        print(f'\n##################\nTILE NUMBER: {index}/{rows*cols}\n##################\n')
+
+        latmin = lat_start + i * half_dimension * 2
+        latmax = latmin + half_dimension * 2
+        lonmin = lon_start + j * half_dimension * 2
+        lonmax = lonmin + half_dimension * 2
+
+        print(f'\t\tCOORDINATES\n\t\t\t{latmax}\t\t\t\n{lonmin}\t\t\t\t\t{lonmax}\n\t\t\t{latmin}\n')
+        xmin, ymin, xmax, ymax = latlon_to_mercator_bbox(south=latmin,
+                                                         north=latmax,
+                                                         west=lonmin,
+                                                         east=lonmax)
+
+        extent_mercator = (xmin, xmax, ymin, ymax)
+
+        skip = download_map_tile(latmin=latmin,
+                                 latmax=latmax,
+                                 lonmin=lonmin,
+                                 lonmax=lonmax,
+                                 extent=extent_mercator,
+                                 filename=f'{i}_{j}')
+
+        download_map(extent=extent_mercator,
+                     skipping_flag=skip,
+                     filename=f'{i}_{j}')
 
 print("Dataset image and mask saved")
