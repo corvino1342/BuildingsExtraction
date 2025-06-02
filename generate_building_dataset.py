@@ -14,11 +14,11 @@ getcontext().prec = 9
 
 dataset_type = 'training' # training or test
 
-# INITIAL COORDINATES TRAINING
-base_lat, base_lon = Decimal("40.964"), Decimal("14.223")
-
-# INITIAL COORDINATES TRAINING
-# base_lat, base_lon = Decimal("40.546"), Decimal("15.483")
+# INITIAL COORDINATES
+if dataset_type == 'training':
+    base_lat, base_lon = Decimal("40.964"), Decimal("14.223")
+elif dataset_type == 'test':
+    base_lat, base_lon = Decimal("40.798"), Decimal("14.770")
 
 
 # Create folders
@@ -35,11 +35,11 @@ def latlon_to_mercator_bbox(south, north, west, east):
     xmin, ymin = transformer.transform(west, south)
     xmax, ymax = transformer.transform(east, north)
 
-    return xmin, ymin, xmax, ymax
+    return xmin, xmax, ymin, ymax
 
-# DOWNLOAD MAP IMAGE
-def download_map_tile(latmin, latmax, lonmin, lonmax, extent, filename):
-    xmin, xmax, ymin, ymax = extent
+# DOWNLOAD MAP GDF
+def map_gdf(latmin, latmax, lonmin, lonmax, gdf=None):
+    skip = False
 
     try:
         # The right order of coordinates is: west, south, east, north
@@ -48,45 +48,48 @@ def download_map_tile(latmin, latmax, lonmin, lonmax, extent, filename):
 
         # Reproject to match extent (Web Mercator)
         gdf = gdf.to_crs("EPSG:3857")
-        fig, ax = plt.subplots(figsize=(5.12, 5.12), dpi=100, facecolor='black')  # Black background
-        gdf.plot(ax=ax, color='white', edgecolor='none')  # White buildings
-
-        ax.set_axis_off()
-        ax.set_xlim(xmin, xmax)
-        ax.set_ylim(ymin, ymax)
-        fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
-        fig.savefig(f'dataset/{dataset_type}/masks/tile-{filename}.png', dpi=100, bbox_inches=None, pad_inches=0, facecolor='black')
-        plt.close(fig)
-
-        # Save the GeoDataFrame as a GeoJSON
-        gdf.to_file(f"dataset/{dataset_type}/geojson/tile-{filename}.geojson", driver='GeoJSON')
-        fig.set_size_inches(5.12, 5.12)
-        skipping_flag = False
 
     except InsufficientResponseError:
+        skip = True
         print("Empty tile!")
-        skipping_flag = True
-    return skipping_flag
 
-# DOWNLOAD MAP SATELLITE
-def download_map(extent, skipping_flag, filename):
+    return gdf, skip
 
-    if not skipping_flag:
-        zoom = 18
-        xmin, xmax, ymin, ymax = extent
 
-        # Compute bounding box for 512x512 pixels at given zoom
+def png_saves(gdf, extent, filename):
 
-        # Convert center point to mercator
-        img, _ = ctx.bounds2img(xmin, ymin, xmax, ymax, zoom=zoom, source=ctx.providers.Esri.WorldImagery)
-        tile_size = 512
+    ########### MASK ###########
+    xmin, xmax, ymin, ymax = extent
 
-        # Resize to 512×512 if necessary
-        if img.shape[0] != tile_size or img.shape[1] != tile_size:
-            img = np.array(Image.fromarray(img).resize((tile_size, tile_size), resample=Image.BILINEAR))
+    fig, ax = plt.subplots(figsize=(5.12, 5.12), dpi=100, facecolor='black')  # Black background
+    gdf.plot(ax=ax, color='white', edgecolor='none')  # White buildings
 
-        # Save image
-        plt.imsave(f'dataset/{dataset_type}/images/tile-{filename}.png', img)# Download and save map tiles
+    ax.set_axis_off()
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(ymin, ymax)
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+    fig.savefig(f'dataset/{dataset_type}/masks/tile-{filename}.png', dpi=100, bbox_inches=None, pad_inches=0,
+                facecolor='black')
+    plt.close(fig)
+
+    # Save the GeoDataFrame as a GeoJSON
+    gdf.to_file(f"dataset/{dataset_type}/geojson/tile-{filename}.geojson", driver='GeoJSON')
+    fig.set_size_inches(5.12, 5.12)
+
+    ########### SATELLITE ###########
+    zoom = 18
+    # Convert center point to mercator
+    img, _ = ctx.bounds2img(xmin, ymin, xmax, ymax, zoom=zoom, source=ctx.providers.Esri.WorldImagery)
+    tile_size = 512
+
+    # Resize to 512×512 if necessary
+    if img.shape[0] != tile_size or img.shape[1] != tile_size:
+        img = np.array(Image.fromarray(img).resize((tile_size, tile_size), resample=Image.BILINEAR))
+
+    # Save image
+    plt.imsave(f'dataset/{dataset_type}/images/tile-{filename}.png', img) # Download and save map tiles
+
+
 
 # TILE LOOP
 """
@@ -120,8 +123,8 @@ for i in range(dataset_dim):
 
 
 # TILE GRID
-rows = 24
-cols = 25
+rows = 3
+cols = 3
 
 half_dimension = Decimal("0.002")
 
@@ -139,22 +142,22 @@ for i in range(rows):
         lonmax = lonmin + half_dimension * 2
 
         print(f'\t\tCOORDINATES\n\t\t\t{latmax}\t\t\t\n{lonmin}\t\t\t\t\t{lonmax}\n\t\t\t{latmin}\n')
-        xmin, ymin, xmax, ymax = latlon_to_mercator_bbox(south=latmin,
-                                                         north=latmax,
-                                                         west=lonmin,
-                                                         east=lonmax)
 
-        extent_mercator = (xmin, xmax, ymin, ymax)
+        extent_mercator = latlon_to_mercator_bbox(south=latmin,
+                                                  north=latmax,
+                                                  west=lonmin,
+                                                  east=lonmax)
 
-        skip = download_map_tile(latmin=latmin,
-                                 latmax=latmax,
-                                 lonmin=lonmin,
-                                 lonmax=lonmax,
-                                 extent=extent_mercator,
-                                 filename=f'{i}_{j}')
+        gdf, skip = map_gdf(latmin=latmin,
+                       latmax=latmax,
+                       lonmin=lonmin,
+                       lonmax=lonmax)
 
-        download_map(extent=extent_mercator,
-                     skipping_flag=skip,
-                     filename=f'{i}_{j}')
+        if not skip:
+
+            png_saves(gdf=gdf,
+                      extent=extent_mercator,
+                      filename=f'{i}_{j}')
+
 
 print("Dataset image and mask saved")
