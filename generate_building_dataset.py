@@ -9,7 +9,6 @@ from decimal import Decimal, getcontext      # I need to use it to ensure the co
 from osmnx._errors import InsufficientResponseError
 import geopandas as gpd
 import albumentations as A
-from albumentations.pytorch import ToTensorV2
 
 getcontext().prec = 9
 # CONFIGURATION
@@ -31,6 +30,7 @@ os.makedirs(f"dataset/{dataset_type}/images", exist_ok=True)
 os.makedirs(f"dataset/{dataset_type}/masks", exist_ok=True)
 os.makedirs(f"dataset/{dataset_type}/geojson", exist_ok=True)
 
+# Transformation used to get images and masks as tensors
 transformer = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
 
 
