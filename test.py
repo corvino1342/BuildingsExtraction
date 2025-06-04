@@ -6,12 +6,12 @@ from unet import UNet
 
 # === Initial Configuration ===
 
-tile_number = 20
+tile_number = '0_2'
 
-model_path = "trained_models/unet_1.pth"
+model_path = "trained_models/unet_2.pth"
 
-image_path = f"dataset/test/images/tile{tile_number}.png"  # Sostituisci con il tuo path
-mask_path = f"dataset/test/masks/tile{tile_number}.png"
+image_path = f"dataset/test/images/tile-{tile_number}.png"
+mask_path = f"dataset/test/masks/tile-{tile_number}.png"
 
 
 # === Load the model ===
@@ -26,7 +26,7 @@ transform = transforms.Compose([
 
 img = Image.open(image_path).convert("RGB")
 mask = Image.open(mask_path).convert("L")
-input_tensor = transform(img).unsqueeze(0)  # Aggiunge dimensione batch → [1, 3, H, W]
+input_tensor = transform(img).unsqueeze(0)
 
 # === Inference ===
 with torch.no_grad():
