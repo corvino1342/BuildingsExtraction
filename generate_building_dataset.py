@@ -8,9 +8,14 @@ import numpy as np
 from decimal import Decimal, getcontext      # I need to use it to ensure the correct operations with decimals
 from osmnx._errors import InsufficientResponseError
 import geopandas as gpd
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
 
 getcontext().prec = 9
 # CONFIGURATION
+
+HorizontalFlip = A.Compose([A.HorizontalFlip(p=1)])
+VerticalFlip = A.Compose([A.VerticalFlip(p=1)])
 
 dataset_type = 'training' # training or test
 
@@ -38,8 +43,7 @@ def latlon_to_mercator_bbox(south, north, west, east):
     return xmin, xmax, ymin, ymax
 
 # DOWNLOAD MAP GDF
-def map_gdf(latmin, latmax, lonmin, lonmax, gdf=None):
-    skip = False
+def map_gdf(latmin, latmax, lonmin, lonmax, gdf=None, skip=False):
 
     try:
         # The right order of coordinates is: west, south, east, north
@@ -68,9 +72,12 @@ def png_saves(gdf, extent, filename):
     ax.set_xlim(xmin, xmax)
     ax.set_ylim(ymin, ymax)
     fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
-    fig.savefig(f'dataset/{dataset_type}/masks/tile-{filename}.png', dpi=100, bbox_inches=None, pad_inches=0,
-                facecolor='black')
+    fig.savefig(f'dataset/{dataset_type}/masks/tile-{filename}.png',
+                dpi=100, bbox_inches=None, pad_inches=0, facecolor='black')
     plt.close(fig)
+
+    # The flipping must need that images and masks to be arrays
+    mask_img = np.array(Image.open(f'dataset/{dataset_type}/masks/tile-{filename}.png').convert("L"))
 
     # Save the GeoDataFrame as a GeoJSON
     gdf.to_file(f"dataset/{dataset_type}/geojson/tile-{filename}.geojson", driver='GeoJSON')
@@ -89,37 +96,23 @@ def png_saves(gdf, extent, filename):
     # Save image
     plt.imsave(f'dataset/{dataset_type}/images/tile-{filename}.png', img) # Download and save map tiles
 
+    # Apply augmentation
 
+    ###### HORIZONTAL FLIPPING ######
+    augmented = HorizontalFlip(image=img, mask=mask_img)
+    image_aug = augmented["image"]
+    mask_aug = augmented["mask"]
 
-# TILE LOOP
-"""
-dataset_dim = 200
+    Image.fromarray(image_aug).save(f"dataset/{dataset_type}/images/tile-{filename}_h.png")
+    Image.fromarray(mask_aug).save(f"dataset/{dataset_type}/masks/tile-{filename}_h.png")
 
-for i in range(dataset_dim):
+    ###### VERTICAL FLIPPING ######
+    augmented = VerticalFlip(image=img, mask=mask_img)
+    image_aug = augmented["image"]
+    mask_aug = augmented["mask"]
 
-    print(f'\n##################\nTILE NUMBER: {i}/{dataset_dim}\n##################\n')
-    map_shift = Decimal(i*0.01)
-    half_dimension = Decimal("0.001")
-
-    # (+ NORTH shift) (- SOUTH shift)
-    lat = base_lat + map_shift
-
-    # (+ EAST shift) (- WEST shift)
-    lon = base_lon - map_shift
-
-    latsouth = lat - half_dimension
-    latnorth = lat + half_dimension
-    lonwest = lon - half_dimension
-    loneast = lon + half_dimension
-
-    print(f'\t\tCOORDINATES\n\t\t\t{latnorth}\t\t\t\n{lonwest}\t\t\t\t\t{loneast}\n\t\t\t{latsouth}\n')
-    xmin, ymin, xmax, ymax = latlon_to_mercator_bbox(south=latsouth, north=latnorth, west=lonwest, east=loneast)
-
-    extent_mercator = (xmin, xmax, ymin, ymax)
-
-    skip = download_map_tile(latmin=latsouth, latmax=latnorth, lonmin=lonwest, lonmax=loneast, extent=extent_mercator, filename=f'{i}')
-    download_map(extent=extent_mercator, skipping_flag=skip, filename=f'{i}')
-"""
+    Image.fromarray(image_aug).save(f"dataset/{dataset_type}/images/tile-{filename}_v.png")
+    Image.fromarray(mask_aug).save(f"dataset/{dataset_type}/masks/tile-{filename}_v.png")
 
 
 # TILE GRID
