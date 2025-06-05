@@ -20,7 +20,7 @@ dataset_type = 'training' # training or test
 
 # INITIAL COORDINATES
 if dataset_type == 'training':
-    base_lat, base_lon = Decimal("40.964"), Decimal("14.223")
+    base_lat, base_lon = Decimal("40.719"), Decimal("14.483")
 elif dataset_type == 'test':
     base_lat, base_lon = Decimal("40.798"), Decimal("14.770")
 
@@ -30,7 +30,6 @@ os.makedirs(f"dataset/{dataset_type}/images", exist_ok=True)
 os.makedirs(f"dataset/{dataset_type}/masks", exist_ok=True)
 os.makedirs(f"dataset/{dataset_type}/geojson", exist_ok=True)
 
-# Transformation used to get images and masks as tensors
 transformer = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
 
 
@@ -116,8 +115,8 @@ def png_saves(gdf, extent, filename):
 
 
 # TILE GRID
-rows = 3
-cols = 3
+rows = 6
+cols = 6
 
 half_dimension = Decimal("0.002")
 
