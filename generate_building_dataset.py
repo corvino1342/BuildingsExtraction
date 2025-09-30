@@ -11,19 +11,24 @@ import geopandas as gpd
 import albumentations as A
 
 getcontext().prec = 9
+
+# ----------------------------
 # CONFIGURATION
+# ----------------------------
 
 HorizontalFlip = A.Compose([A.HorizontalFlip(p=1)])
 VerticalFlip = A.Compose([A.VerticalFlip(p=1)])
 
-dataset_type = 'training' # training or test
+dataset_type = 'test' # training or test
 
+# ----------------------------
 # INITIAL COORDINATES
-if dataset_type == 'training':
-    base_lat, base_lon = Decimal("40.719"), Decimal("14.483")
-elif dataset_type == 'test':
-    base_lat, base_lon = Decimal("40.798"), Decimal("14.770")
+# ----------------------------
 
+base_lat, base_lon = Decimal("40.719"), Decimal("14.483")
+
+if dataset_type == 'test':
+    base_lat, base_lon = Decimal("40.646"), Decimal("15.017")
 
 # Create folders
 os.makedirs(f"dataset/{dataset_type}/images", exist_ok=True)
@@ -31,7 +36,6 @@ os.makedirs(f"dataset/{dataset_type}/masks", exist_ok=True)
 os.makedirs(f"dataset/{dataset_type}/geojson", exist_ok=True)
 
 transformer = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
-
 
 # Conversion for the satellite map
 def latlon_to_mercator_bbox(south, north, west, east):
@@ -41,7 +45,10 @@ def latlon_to_mercator_bbox(south, north, west, east):
 
     return xmin, xmax, ymin, ymax
 
+# ----------------------------
 # DOWNLOAD MAP GDF
+# ----------------------------
+
 def map_gdf(latmin, latmax, lonmin, lonmax, gdf=None, skip=False):
 
     try:
@@ -58,10 +65,12 @@ def map_gdf(latmin, latmax, lonmin, lonmax, gdf=None, skip=False):
 
     return gdf, skip
 
-
 def png_saves(gdf, extent, filename):
 
+    # ----------------------------
     ########### MASK ###########
+    # ----------------------------
+
     xmin, xmax, ymin, ymax = extent
 
     fig, ax = plt.subplots(figsize=(5.12, 5.12), dpi=100, facecolor='black')  # Black background
@@ -75,14 +84,17 @@ def png_saves(gdf, extent, filename):
                 dpi=100, bbox_inches=None, pad_inches=0, facecolor='black')
     plt.close(fig)
 
-    # The flipping must need that images and masks to be arrays
+    # In order to get the flipping images, these are meant to be arrays
     mask_img = np.array(Image.open(f'dataset/{dataset_type}/masks/tile-{filename}.png').convert("L"))
 
     # Save the GeoDataFrame as a GeoJSON
     gdf.to_file(f"dataset/{dataset_type}/geojson/tile-{filename}.geojson", driver='GeoJSON')
     fig.set_size_inches(5.12, 5.12)
 
+    # ----------------------------
     ########### SATELLITE ###########
+    # ----------------------------
+
     zoom = 18
     # Convert center point to mercator
     img, _ = ctx.bounds2img(xmin, ymin, xmax, ymax, zoom=zoom, source=ctx.providers.Esri.WorldImagery)
@@ -93,30 +105,32 @@ def png_saves(gdf, extent, filename):
         img = np.array(Image.fromarray(img).resize((tile_size, tile_size), resample=Image.BILINEAR))
 
     # Save image
-    plt.imsave(f'dataset/{dataset_type}/images/tile-{filename}.png', img) # Download and save map tiles
+    plt.imsave(f'dataset/{dataset_type}/images/tile-{filename}.png', img)
 
-    # Apply augmentation
+    # Data augmentation with horizontal and vertical flipping
+    if dataset_type != 'test':
+        ###### HORIZONTAL FLIPPING ######
+        augmented = HorizontalFlip(image=img, mask=mask_img)
+        image_aug = augmented["image"]
+        mask_aug = augmented["mask"]
 
-    ###### HORIZONTAL FLIPPING ######
-    augmented = HorizontalFlip(image=img, mask=mask_img)
-    image_aug = augmented["image"]
-    mask_aug = augmented["mask"]
+        Image.fromarray(image_aug).save(f"dataset/{dataset_type}/images/tile-{filename}_h.png")
+        Image.fromarray(mask_aug).save(f"dataset/{dataset_type}/masks/tile-{filename}_h.png")
 
-    Image.fromarray(image_aug).save(f"dataset/{dataset_type}/images/tile-{filename}_h.png")
-    Image.fromarray(mask_aug).save(f"dataset/{dataset_type}/masks/tile-{filename}_h.png")
+        ###### VERTICAL FLIPPING ######
+        augmented = VerticalFlip(image=img, mask=mask_img)
+        image_aug = augmented["image"]
+        mask_aug = augmented["mask"]
 
-    ###### VERTICAL FLIPPING ######
-    augmented = VerticalFlip(image=img, mask=mask_img)
-    image_aug = augmented["image"]
-    mask_aug = augmented["mask"]
+        Image.fromarray(image_aug).save(f"dataset/{dataset_type}/images/tile-{filename}_v.png")
+        Image.fromarray(mask_aug).save(f"dataset/{dataset_type}/masks/tile-{filename}_v.png")
 
-    Image.fromarray(image_aug).save(f"dataset/{dataset_type}/images/tile-{filename}_v.png")
-    Image.fromarray(mask_aug).save(f"dataset/{dataset_type}/masks/tile-{filename}_v.png")
-
-
+# ----------------------------
 # TILE GRID
-rows = 6
-cols = 6
+# ----------------------------
+
+rows = 4
+cols = 4
 
 half_dimension = Decimal("0.002")
 
@@ -139,17 +153,14 @@ for i in range(rows):
                                                   north=latmax,
                                                   west=lonmin,
                                                   east=lonmax)
-
         gdf, skip = map_gdf(latmin=latmin,
-                       latmax=latmax,
-                       lonmin=lonmin,
-                       lonmax=lonmax)
+                            latmax=latmax,
+                            lonmin=lonmin,
+                            lonmax=lonmax)
 
         if not skip:
-
             png_saves(gdf=gdf,
                       extent=extent_mercator,
                       filename=f'{i}_{j}')
 
-
-print("Dataset image and mask saved")
+print("Maps and Masks saved!")
