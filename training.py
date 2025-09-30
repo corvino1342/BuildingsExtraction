@@ -119,13 +119,13 @@ criterion = nn.BCEWithLogitsLoss()
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 # Saving metrics
-csv_metrics = f"runs/train_metrics_{model_name}.csv"
+csv_metrics = f"runs/metrics_{model_name}.csv"
 
 with open(csv_metrics, mode='w', newline='') as f:
     writer_csv = csv.writer(f)
     writer_csv.writerow(["epoch",
-                         "epoch_train_loss", "train_dice", "train_iou", "train_pixel_acc", "train_precision", "train_recall",
-                         "epoch_val_loss", "val_dice", "val_iou", "val_pixel_acc", "val_precision", "val_recall",
+                         "train_epoch_loss", "train_dice", "train_iou", "train_pixel_acc", "train_precision", "train_recall",
+                         "val_epoch_loss", "val_dice", "val_iou", "val_pixel_acc", "val_precision", "val_recall",
                          "time"])
 
 
@@ -176,7 +176,7 @@ for epoch in range(num_epochs):
     train_prec = (prec_total / len(train_loader)).item()
     train_recall = (recall_total / len(train_loader)).item()
 
-    print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_train_loss:.4f}, Time: {elapsed_time:.2f} seconds")
+    print(f"Epoch {epoch+1}/{num_epochs}, Train Loss: {epoch_train_loss:.4f}, Time: {elapsed_time:.2f} seconds")
 
     # --- VALIDATION STEP ---
     model.eval()
