@@ -1,7 +1,15 @@
 import torch.nn as nn
 from unet_architecture import *
 
+# UNet1
 
+# Input-> [Down1]->                                                              [Up1]-> Output
+#                  [Down2]->                                              [Up2]->
+#                           [Down3]->                              [Up3]->
+#                                    [Down4]->              [Up4]->
+#                                             [Bottleneck]->
+
+# The actual UNet to train. The training time is a lot bigger wrt other
 class UNet1(nn.Module):
     def __init__(self, n_channels, n_classes, bilinear=True):
         super(UNet1, self).__init__()
@@ -34,6 +42,14 @@ class UNet1(nn.Module):
         logits = self.outc(x)
         return logits
 
+# UNet2
+
+# Input-> [Down1]->                                              [Up1]-> Output
+#                  [Down2]->                              [Up2]->
+#                           [Down3]->              [Up3]->
+#                                    [Bottleneck]->
+
+# Simple UNet in order to train in human-size time
 class UNet2(nn.Module):
     def __init__(self, n_channels, n_classes, bilinear=True):
         super(UNet2, self).__init__()
