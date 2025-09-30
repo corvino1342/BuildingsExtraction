@@ -1,26 +1,27 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 
-model_architecture = 'unet_4'
+model_architecture = 'unet_5'
 
-df = pd.read_csv(f'runs/train_metrics_{model_architecture}.csv')
+df = pd.read_csv(f'runs/metrics_{model_architecture}.csv')
+
 
 
 # Metric Plots
-metrics = ['loss', 'dice', 'iou', 'pixel_acc', 'precision', 'recall']
+metrics = ['epoch_loss', 'dice', 'iou', 'pixel_acc', 'precision', 'recall']
 epochs = df['epoch']
 
-plt.figure(figsize=(15, 10))
 
 for i, metric in enumerate(metrics, 1):
-    plt.subplot(2, 3, i)
-    plt.plot(epochs, df[metric], label=metric, linewidth=2)
+    plt.figure(figsize=(10, 5))
+    plt.plot(epochs, df[f'train_{metric}'], label=f'train_{metric}', linewidth=2)
+    plt.plot(epochs, df[f'val_{metric}'], label=f'val_{metric}', linewidth=2)
     plt.xlabel('Epoch')
-    plt.title(f'{metric} over Epochs')
+    plt.title(f'{metric} over epochs')
     plt.legend()
+    plt.show()
 
 plt.tight_layout()
-plt.show()
 total_seconds = df['time'].sum()
 hours, remainder = divmod(total_seconds, 3600)
 minutes = remainder // 60
