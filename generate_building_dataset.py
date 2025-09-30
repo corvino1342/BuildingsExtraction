@@ -19,7 +19,7 @@ getcontext().prec = 9
 HorizontalFlip = A.Compose([A.HorizontalFlip(p=1)])
 VerticalFlip = A.Compose([A.VerticalFlip(p=1)])
 
-dataset_type = 'test' # training or test
+dataset_type = 'validation' # training or test
 
 # ----------------------------
 # INITIAL COORDINATES
@@ -29,6 +29,8 @@ base_lat, base_lon = Decimal("40.719"), Decimal("14.483")
 
 if dataset_type == 'test':
     base_lat, base_lon = Decimal("40.646"), Decimal("15.017")
+elif dataset_type == 'validation':
+    base_lat, base_lon = Decimal("40.358"), Decimal("15.823")
 
 # Create folders
 os.makedirs(f"dataset/{dataset_type}/images", exist_ok=True)
@@ -129,8 +131,8 @@ def png_saves(gdf, extent, filename):
 # TILE GRID
 # ----------------------------
 
-rows = 4
-cols = 4
+rows = 3
+cols = 3
 
 half_dimension = Decimal("0.002")
 
@@ -147,7 +149,8 @@ for i in range(rows):
         lonmin = lon_start + j * half_dimension * 2
         lonmax = lonmin + half_dimension * 2
 
-        print(f'\t\tCOORDINATES\n\t\t\t{latmax}\t\t\t\n{lonmin}\t\t\t\t\t{lonmax}\n\t\t\t{latmin}\n')
+        print(f'COORDINATES\n{latmax}, {lonmin}\t\t\t\t{latmax}, {lonmax}\n\n\n\n'
+              f'{latmin}, {lonmin}\t\t\t\t{latmin}, {lonmax}\n')
 
         extent_mercator = latlon_to_mercator_bbox(south=latmin,
                                                   north=latmax,
