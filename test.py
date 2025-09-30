@@ -2,21 +2,24 @@ import torch
 from torchvision import transforms
 from PIL import Image
 import matplotlib.pyplot as plt
-from unet import UNet
+from unet import UNet2
+
+model_loaded = UNet2
 
 # === Initial Configuration ===
 
-tile_number = '0_2'
+tile_number = ('3_2')
 
-model_path = "trained_models/unet_2.pth"
+model_path = "runs/unet_1.pth"
+
 
 image_path = f"dataset/test/images/tile-{tile_number}.png"
 mask_path = f"dataset/test/masks/tile-{tile_number}.png"
 
 
 # === Load the model ===
-model = UNet(n_channels=3, n_classes=1)
-model.load_state_dict(torch.load(model_path, map_location=torch.device("cpu")))
+model = model_loaded(n_channels=3, n_classes=1)
+model.load_state_dict(torch.load(model_path, map_location=torch.device("mps")))
 model.eval()
 
 # === Prepare the image ===
@@ -53,3 +56,10 @@ plt.axis("off")
 
 plt.tight_layout()
 plt.show()
+
+# === Save the predicted mask ===
+from torchvision.utils import save_image
+
+save_path = f"predictions/predicted_mask_{tile_number}.png"
+save_image(binary_mask, save_path)
+print(f"Predicted mask saved at: {save_path}")
