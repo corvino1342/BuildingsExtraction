@@ -9,6 +9,8 @@ from decimal import Decimal, getcontext      # I need to use it to ensure the co
 from osmnx._errors import InsufficientResponseError
 import geopandas as gpd
 import albumentations as A
+from rasterio import features
+from affine import Affine
 
 getcontext().prec = 9
 
@@ -19,7 +21,7 @@ getcontext().prec = 9
 HorizontalFlip = A.Compose([A.HorizontalFlip(p=1)])
 VerticalFlip = A.Compose([A.VerticalFlip(p=1)])
 
-dataset_type = 'validation' # training or test
+dataset_type = 'train' # training, validation or test
 
 # ----------------------------
 # INITIAL COORDINATES
@@ -67,47 +69,45 @@ def map_gdf(latmin, latmax, lonmin, lonmax, gdf=None, skip=False):
 
     return gdf, skip
 
+def rasterize_mask(gdf, xmin, ymin, xmax, ymax, out_shape=(512, 512)):
+    transform = Affine((xmax - xmin) / out_shape[1], 0, xmin,
+                       0, (ymin - ymax) / out_shape[0], ymax)
+    mask = features.rasterize(
+        ((geom, 1) for geom in gdf.geometry),
+        out_shape=out_shape,
+        transform=transform,
+        fill=0,
+        dtype='uint8'
+    )
+    return mask
+
 def png_saves(gdf, extent, filename):
 
     # ----------------------------
-    ########### MASK ###########
+    ########### MASK and SATELLITE ###########
     # ----------------------------
+
+    zoom = 19
+    tile_size = 512
 
     xmin, xmax, ymin, ymax = extent
 
-    fig, ax = plt.subplots(figsize=(5.12, 5.12), dpi=100, facecolor='black')  # Black background
-    gdf.plot(ax=ax, color='white', edgecolor='none')  # White buildings
+    # Convert center point to mercator and get image extent
+    img, img_extent = ctx.bounds2img(xmin, ymin, xmax, ymax, zoom=zoom, source=ctx.providers.Esri.WorldImagery)
 
-    ax.set_axis_off()
-    ax.set_xlim(xmin, xmax)
-    ax.set_ylim(ymin, ymax)
-    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
-    fig.savefig(f'dataset/{dataset_type}/masks/tile-{filename}.png',
-                dpi=100, bbox_inches=None, pad_inches=0, facecolor='black')
-    plt.close(fig)
-
-    # In order to get the flipping images, these are meant to be arrays
-    mask_img = np.array(Image.open(f'dataset/{dataset_type}/masks/tile-{filename}.png').convert("L"))
-
-    # Save the GeoDataFrame as a GeoJSON
-    gdf.to_file(f"dataset/{dataset_type}/geojson/tile-{filename}.geojson", driver='GeoJSON')
-    fig.set_size_inches(5.12, 5.12)
-
-    # ----------------------------
-    ########### SATELLITE ###########
-    # ----------------------------
-
-    zoom = 18
-    # Convert center point to mercator
-    img, _ = ctx.bounds2img(xmin, ymin, xmax, ymax, zoom=zoom, source=ctx.providers.Esri.WorldImagery)
-    tile_size = 512
+    # Use img_extent to rasterize mask aligned with image
+    mask_img = rasterize_mask(gdf, img_extent[0], img_extent[2], img_extent[1], img_extent[3], out_shape=(tile_size,tile_size))
 
     # Resize to 512×512 if necessary
     if img.shape[0] != tile_size or img.shape[1] != tile_size:
         img = np.array(Image.fromarray(img).resize((tile_size, tile_size), resample=Image.BILINEAR))
 
-    # Save image
+    # Save image and mask
+    Image.fromarray(mask_img * 255).save(f'dataset/{dataset_type}/masks/tile-{filename}.png')
     plt.imsave(f'dataset/{dataset_type}/images/tile-{filename}.png', img)
+
+    # Save the GeoDataFrame as a GeoJSON
+    gdf.to_file(f"dataset/{dataset_type}/geojson/tile-{filename}.geojson", driver='GeoJSON')
 
     # Data augmentation with horizontal and vertical flipping
     if dataset_type != 'test':
@@ -131,23 +131,23 @@ def png_saves(gdf, extent, filename):
 # TILE GRID
 # ----------------------------
 
-rows = 3
-cols = 3
+rows = 5
+cols = 5
 
-half_dimension = Decimal("0.002")
+tile_dimension = Decimal("0.001")
 
-lat_start = base_lat - (rows // 2) * half_dimension * 2
-lon_start = base_lon - (rows // 2) * half_dimension * 2
+lat_start = base_lat - (rows // 2) * tile_dimension
+lon_start = base_lon - (rows // 2) * tile_dimension
 index = 0
 for i in range(rows):
     for j in range(cols):
         index += 1
         print(f'\n##################\nTILE NUMBER: {index}/{rows*cols}\n##################\n')
 
-        latmin = lat_start + i * half_dimension * 2
-        latmax = latmin + half_dimension * 2
-        lonmin = lon_start + j * half_dimension * 2
-        lonmax = lonmin + half_dimension * 2
+        latmin = lat_start + i * tile_dimension
+        latmax = latmin + tile_dimension
+        lonmin = lon_start + j * tile_dimension
+        lonmax = lonmin + tile_dimension
 
         print(f'COORDINATES\n{latmax}, {lonmin}\t\t\t\t{latmax}, {lonmax}\n\n\n\n'
               f'{latmin}, {lonmin}\t\t\t\t{latmin}, {lonmax}\n')

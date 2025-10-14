@@ -76,7 +76,7 @@ def recall_score(preds, targets, threshold=0.5, eps=1e-6):
 
 starting_time = time.time()
 
-model_name = 'unet_5'
+model_name = 'unet_Massachusetts'
 
 # Initial setup
 device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
@@ -84,7 +84,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.ba
 print(device)
 
 num_epochs = 50
-batch_size = 4
+batch_size = 32
 learning_rate = 1e-3
 georef = False
 
@@ -93,25 +93,27 @@ transform = transforms.Compose([
 ])
 
 # Dataset and DataLoader
-if georef:
-    train_dataset = MyDataset(image_dir="dataset/training/georef",
-                              mask_dir="dataset/training/masks",
-                              transform=transform)
-else:
-    train_dataset = MyDataset(image_dir="dataset/training/images",
-                              mask_dir="dataset/training/masks",
-                              transform=transform)
+train_dataset = MyDataset(image_dir="dataset/training/images",
+                          mask_dir="dataset/training/masks",
+                          transform=transform)
+
+# Massachusetts Dataset
+train_dataset = MyDataset(image_dir='../BuildingsHeight/datasets/tiles/train',
+                          mask_dir='../BuildingsHeight/datasets/tiles/train_labels',
+                          transform=transform)
+
 
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
-val_dataset = MyDataset(image_dir="dataset/validation/images",
-                        mask_dir="dataset/validation/masks",
+val_dataset = MyDataset(image_dir="../BuildingsHeight/datasets/tiles/val",
+                        mask_dir="../BuildingsHeight/datasets/tiles/val_labels",
                         transform=transform)
 
 val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
 print(f'Training dataset dimension: {len(train_dataset)}')
 print(f'Validation dataset dimension: {len(val_dataset)}')
+
 
 # model initialization, loss and optimizer
 model = model_loaded(n_channels=3, n_classes=1).to(device)
@@ -176,7 +178,7 @@ for epoch in range(num_epochs):
     train_prec = (prec_total / len(train_loader)).item()
     train_recall = (recall_total / len(train_loader)).item()
 
-    print(f"Epoch {epoch+1}/{num_epochs}, Train Loss: {epoch_train_loss:.4f}, Time: {elapsed_time:.2f} seconds")
+    print(f"Epoch {epoch+1}/{num_epochs}\n\nTrain Loss: {epoch_train_loss:.4f}, Time: {elapsed_time:.2f} seconds")
 
     # --- VALIDATION STEP ---
     model.eval()

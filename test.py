@@ -8,14 +8,16 @@ model_loaded = UNet2
 
 # === Initial Configuration ===
 
-tile_number = ('3_2')
+tile_number = ('0_0')
 
-model_path = "runs/unet_1.pth"
+model_path = "runs/unet_Massachusetts.pth"
 
 
 image_path = f"dataset/test/images/tile-{tile_number}.png"
 mask_path = f"dataset/test/masks/tile-{tile_number}.png"
 
+image_path = '../BuildingsHeight/datasets/tiles/test/22828930_15_1.tiff'
+mask_path = '../BuildingsHeight/datasets/tiles/test_labels/22828930_15_1.tif'
 
 # === Load the model ===
 model = model_loaded(n_channels=3, n_classes=1)

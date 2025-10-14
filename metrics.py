@@ -1,11 +1,9 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 
-model_architecture = 'unet_5'
+model_architecture = 'unet_Massachusetts'
 
 df = pd.read_csv(f'runs/metrics_{model_architecture}.csv')
-
-
 
 # Metric Plots
 metrics = ['epoch_loss', 'dice', 'iou', 'pixel_acc', 'precision', 'recall']
