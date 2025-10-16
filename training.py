@@ -26,9 +26,9 @@ import csv
 #                           [Down3]->              [Up3]->
 #                                    [Bottleneck]->
 
-from unet import UNet2
+from unet import UNet1
 
-model_loaded = UNet2
+model_loaded = UNet1
 
 
 def dice_score(preds, targets, threshold=0.5, eps=1e-6):
@@ -83,9 +83,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.ba
  # device = 'cpu'
 print(device)
 
-num_epochs = 50
+num_epochs = 100
 batch_size = 32
-learning_rate = 1e-3
+learning_rate = 1e-4
 georef = False
 
 transform = transforms.Compose([
@@ -162,7 +162,8 @@ for epoch in range(num_epochs):
         prec_total += precision_score(outputs, masks)
         recall_total += recall_score(outputs, masks)
 
-        print(f'Batch Number: {batch_number}/{len(train_loader)}')
+        if batch_number % 10 == 0:
+            print(f'{(100 * (batch_number/len(train_loader))):.0f}%')
 
         optimizer.zero_grad()
         loss.backward()
@@ -178,7 +179,9 @@ for epoch in range(num_epochs):
     train_prec = (prec_total / len(train_loader)).item()
     train_recall = (recall_total / len(train_loader)).item()
 
-    print(f"Epoch {epoch+1}/{num_epochs}\n\nTrain Loss: {epoch_train_loss:.4f}, Time: {elapsed_time:.2f} seconds")
+    print(f"\nEpoch {epoch+1}/{num_epochs} ----- Time spent: {elapsed_time:.2f} seconds")
+
+    print(f'Training - Loss: {epoch_train_loss:.4f}, Precision: {train_prec:.4f}, Recall: {train_recall:.4f}')
 
     # --- VALIDATION STEP ---
     model.eval()
@@ -212,7 +215,7 @@ for epoch in range(num_epochs):
     val_prec = (val_prec / len(val_loader)).item()
     val_recall = (val_recall / len(val_loader)).item()
 
-    print(f"Validation - Loss: {epoch_val_loss:.4f}, Dice: {val_dice:.4f}, IoU: {val_iou:.4f}")
+    print(f"Validation - Loss: {epoch_val_loss:.4f}, Precision: {val_prec:.4f}, Recall: {val_recall:.4f}\n\n")
 
     # Save metrics to CSV
     with open(csv_metrics, mode='a', newline='') as f:
