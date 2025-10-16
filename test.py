@@ -2,19 +2,19 @@ import torch
 from torchvision import transforms
 from PIL import Image
 import matplotlib.pyplot as plt
-from unet import UNet2
+from unet import UNet1
 
-model_loaded = UNet2
+model_loaded = UNet1
 
 # === Initial Configuration ===
 
-tile_number = ('0_0')
+tile_number = ('3_2')
 
 model_path = "runs/unet_Massachusetts.pth"
 
 
-image_path = f"dataset/test/images/tile-{tile_number}.png"
-mask_path = f"dataset/test/masks/tile-{tile_number}.png"
+#image_path = f"dataset/test/images/tile-{tile_number}.png"
+#mask_path = f"dataset/test/masks/tile-{tile_number}.png"
 
 image_path = '../BuildingsHeight/datasets/tiles/test/22828930_15_1.tiff'
 mask_path = '../BuildingsHeight/datasets/tiles/test_labels/22828930_15_1.tif'
@@ -40,28 +40,35 @@ with torch.no_grad():
     binary_mask = (prediction > 0.5).float()
 
 # === Visualization ===
-plt.figure(figsize=(10, 4))
-plt.subplot(1, 3, 1)
-plt.title("Input Image")
-plt.imshow(img)
-plt.axis("off")
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib import colors
+from matplotlib import patches
 
-plt.subplot(1, 3, 2)
-plt.title("Real Mask")
-plt.imshow(mask, cmap="gray")
-plt.axis("off")
+# Convert masks to numpy
+binary_mask_np = binary_mask.squeeze().numpy()
+mask_np = np.array(mask) / 255.0  # normalize if mask is 0-255
 
-plt.subplot(1, 3, 3)
-plt.title("Predicted Mask")
-plt.imshow(binary_mask.squeeze().numpy(), cmap="gray")
-plt.axis("off")
+fig, axes = plt.subplots(1, 3, figsize=(18, 6), constrained_layout=True)
 
-plt.tight_layout()
+# --- 1. Input Image ---
+axes[0].imshow(img)
+axes[0].set_title("Input Image", fontsize=16)
+axes[0].axis("off")
+
+# --- 2. Input + Predicted Mask Overlay ---
+axes[1].imshow(img)
+axes[1].imshow(binary_mask_np, cmap='jet', alpha=0.5)
+axes[1].contour(binary_mask_np, colors='white', linewidths=1)
+axes[1].set_title("Input + Predicted Mask", fontsize=16)
+axes[1].axis("off")
+
+# --- 3. Difference Map ---
+# Positive: False Negative (missed), Negative: False Positive (extra)
+diff = mask_np - binary_mask_np
+im = axes[2].imshow(diff, cmap='bwr', vmin=-1, vmax=1)
+axes[2].set_title("Difference (Real - Predicted)", fontsize=16)
+axes[2].axis("off")
+fig.colorbar(im, ax=axes[2], fraction=0.046, pad=0.04, label='Error')
+
 plt.show()
-
-# === Save the predicted mask ===
-from torchvision.utils import save_image
-
-save_path = f"predictions/predicted_mask_{tile_number}.png"
-save_image(binary_mask, save_path)
-print(f"Predicted mask saved at: {save_path}")
