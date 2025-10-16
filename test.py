@@ -3,28 +3,41 @@ from torchvision import transforms
 from PIL import Image
 import matplotlib.pyplot as plt
 from unet import UNet1
+import time
+import numpy as np
+from matplotlib import colors
+from matplotlib import patches
 
-model_loaded = UNet1
 
 # === Initial Configuration ===
 
-tile_number = ('3_2')
-
+start = time.time()
+model_loaded = UNet1
 model_path = "runs/unet_Massachusetts.pth"
 
 
-#image_path = f"dataset/test/images/tile-{tile_number}.png"
-#mask_path = f"dataset/test/masks/tile-{tile_number}.png"
+#image_path = '../BuildingsHeight/datasets/tiles/test/22828930_15_1.tiff'
+#mask_path = '../BuildingsHeight/datasets/tiles/test_labels/22828930_15_1.tif'
 
-image_path = '../BuildingsHeight/datasets/tiles/test/22828930_15_1.tiff'
-mask_path = '../BuildingsHeight/datasets/tiles/test_labels/22828930_15_1.tif'
+#image_path = f"dataset/test/images/tile-2_3.png"
+#mask_path = f"dataset/test/masks/tile-2_3.png"
+
+image_path = '../BuildingsHeight/datasets/massachusetts-buildings-dataset/tiff/test/22828990_15.tiff'
+mask_path = '../BuildingsHeight/datasets/massachusetts-buildings-dataset/tiff/test_labels/22828990_15.tif'
+
+print(f'Time for Initial Configuration: {(time.time()-start):.3f} s')
 
 # === Load the model ===
+start = time.time()
+
 model = model_loaded(n_channels=3, n_classes=1)
 model.load_state_dict(torch.load(model_path, map_location=torch.device("mps")))
 model.eval()
+print(f'Time for Loading the Model: {(time.time()-start):.3f} s')
 
 # === Prepare the image ===
+start = time.time()
+
 transform = transforms.Compose([
     transforms.ToTensor(),
 ])
@@ -32,22 +45,25 @@ transform = transforms.Compose([
 img = Image.open(image_path).convert("RGB")
 mask = Image.open(mask_path).convert("L")
 input_tensor = transform(img).unsqueeze(0)
+print(f'Time for Image Preparation: {(time.time()-start):.3f} s')
 
 # === Inference ===
+start = time.time()
+
 with torch.no_grad():
     output = model(input_tensor)
     prediction = torch.sigmoid(output)
     binary_mask = (prediction > 0.5).float()
+print(f'Time for Inference: {(time.time()-start):.3f} s')
 
 # === Visualization ===
-import matplotlib.pyplot as plt
-import numpy as np
-from matplotlib import colors
-from matplotlib import patches
+start = time.time()
+
 
 # Convert masks to numpy
 binary_mask_np = binary_mask.squeeze().numpy()
 mask_np = np.array(mask) / 255.0  # normalize if mask is 0-255
+
 
 fig, axes = plt.subplots(1, 3, figsize=(18, 6), constrained_layout=True)
 
@@ -63,12 +79,32 @@ axes[1].contour(binary_mask_np, colors='white', linewidths=1)
 axes[1].set_title("Input + Predicted Mask", fontsize=16)
 axes[1].axis("off")
 
-# --- 3. Difference Map ---
-# Positive: False Negative (missed), Negative: False Positive (extra)
-diff = mask_np - binary_mask_np
-im = axes[2].imshow(diff, cmap='bwr', vmin=-1, vmax=1)
-axes[2].set_title("Difference (Real - Predicted)", fontsize=16)
+# --- 3. Predicted vs True Mask Overlay ---
+axes[2].imshow(img, alpha=0.8)  # base image
+
+# Overlay "true" mask in green, semi-transparent
+axes[2].imshow(mask_np, cmap='Blues', alpha=0.7)
+
+# Overlay predicted mask in red, semi-transparent
+axes[2].imshow(binary_mask_np, cmap='Reds', alpha=0.5)
+
+axes[2].set_title("Predicted vs True Mask Overlay", fontsize=16)
 axes[2].axis("off")
-fig.colorbar(im, ax=axes[2], fraction=0.046, pad=0.04, label='Error')
+
+# Optional legend outside the plot for reference
+import matplotlib.patches as mpatches
+legend_elements = [
+    mpatches.Patch(color='darkblue', label='Mask (Reference)'),
+    mpatches.Patch(color='darkred', label='Prediction'),
+]
+axes[2].legend(
+    handles=legend_elements,
+    loc='upper left',
+    bbox_to_anchor=(1.05, 1),
+    borderaxespad=0,
+    fontsize=12
+)
+
+print(f'Time for Visualization: {(time.time()-start):.3f} s')
 
 plt.show()
