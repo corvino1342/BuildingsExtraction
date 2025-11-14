@@ -7,8 +7,11 @@ model_architecture = 'unet_Massachusetts'
 df = pd.read_csv(f'runs/metrics_{model_architecture}.csv')
 
 # Metric Plots
-metrics = ['epoch_loss', 'dice', 'iou', 'pixel_acc', 'precision', 'recall']
+metrics = ['epoch_loss', 'dice', 'iou', 'pixel_acc', 'precision', 'recall', 'f1']
 epochs = df['epoch']
+
+df[f'train_f1'] = 2 * (df['train_precision'] * df['train_recall'])/(df['train_precision'] + df['train_recall'])
+df[f'val_f1'] = 2 * (df['val_precision'] * df['val_recall'])/(df['val_precision'] + df['val_recall'])
 
 
 for i, metric in enumerate(metrics, 1):
@@ -17,8 +20,8 @@ for i, metric in enumerate(metrics, 1):
     plt.figure(figsize=(10, 6))
 
     # --- Plot training & validation metrics ---
-    plt.plot(epochs, df[f'train_{metric}'], color='#4c9aff', linewidth=2.5, alpha=0.9, label='Training Loss')
-    plt.plot(epochs, df[f'val_{metric}'], color='#ffa726', linewidth=2.5, alpha=0.9, label='Validation Loss')
+    plt.plot(epochs, df[f'train_{metric}'], color='#4c9aff', linewidth=2.5, alpha=0.9, label=f'Training {metric}')
+    plt.plot(epochs, df[f'val_{metric}'], color='#ffa726', linewidth=2.5, alpha=0.9, label=f'Validation {metric}')
 
     # --- Mark and annotate the last values ---
     last_epoch = epochs.iloc[-1]
@@ -46,8 +49,8 @@ for i, metric in enumerate(metrics, 1):
     plt.tight_layout()
 
     # --- Optional: Save or show ---
-    #plt.savefig('fancy_loss_curve.png', dpi=300, bbox_inches='tight')
-    plt.show()
+    plt.savefig(f'predictions/{metric}_{model_architecture}.png', dpi=300, bbox_inches='tight')
+    #plt.show()
 
 plt.tight_layout()
 total_seconds = df['time'].sum()

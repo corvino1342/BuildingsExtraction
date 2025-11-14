@@ -16,14 +16,14 @@ model_loaded = UNet1
 model_path = "runs/unet_Massachusetts.pth"
 
 
-#image_path = '../BuildingsHeight/datasets/tiles/test/22828930_15_1.tiff'
-#mask_path = '../BuildingsHeight/datasets/tiles/test_labels/22828930_15_1.tif'
+image_path = '../BuildingsHeight/datasets/tiles/test/22828930_15_1.tiff'
+mask_path = '../BuildingsHeight/datasets/tiles/test_labels/22828930_15_1.tif'
 
-#image_path = f"dataset/test/images/tile-2_3.png"
-#mask_path = f"dataset/test/masks/tile-2_3.png"
+#image_path = f"dataset/test/images/tile-0_1.png"
+#mask_path = f"dataset/test/masks/tile-0_1.png"
 
-image_path = '../BuildingsHeight/datasets/massachusetts-buildings-dataset/tiff/test/22828990_15.tiff'
-mask_path = '../BuildingsHeight/datasets/massachusetts-buildings-dataset/tiff/test_labels/22828990_15.tif'
+#image_path = '../BuildingsHeight/datasets/massachusetts-buildings-dataset/tiff/test/22828990_15.tiff'
+#mask_path = '../BuildingsHeight/datasets/massachusetts-buildings-dataset/tiff/test_labels/22828990_15.tif'
 
 print(f'Time for Initial Configuration: {(time.time()-start):.3f} s')
 
