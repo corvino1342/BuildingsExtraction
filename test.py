@@ -16,8 +16,10 @@ model_loaded = UNet1
 model_path = "runs/unet_Massachusetts.pth"
 
 
-image_path = '../BuildingsHeight/datasets/tiles/test/22828930_15_1.tiff'
-mask_path = '../BuildingsHeight/datasets/tiles/test_labels/22828930_15_1.tif'
+image_path = 'fotoxtest/foto5.png'
+
+#image_path = '../BuildingsHeight/datasets/tiles/test/22828930_15_1.tiff'
+#mask_path = '../BuildingsHeight/datasets/tiles/test_labels/22828930_15_1.tif'
 
 #image_path = f"dataset/test/images/tile-0_1.png"
 #mask_path = f"dataset/test/masks/tile-0_1.png"
@@ -43,7 +45,7 @@ transform = transforms.Compose([
 ])
 
 img = Image.open(image_path).convert("RGB")
-mask = Image.open(mask_path).convert("L")
+#mask = Image.open(mask_path).convert("L")
 input_tensor = transform(img).unsqueeze(0)
 print(f'Time for Image Preparation: {(time.time()-start):.3f} s')
 
@@ -56,16 +58,18 @@ with torch.no_grad():
     binary_mask = (prediction > 0.5).float()
 print(f'Time for Inference: {(time.time()-start):.3f} s')
 
+
+
 # === Visualization ===
 start = time.time()
 
 
 # Convert masks to numpy
 binary_mask_np = binary_mask.squeeze().numpy()
-mask_np = np.array(mask) / 255.0  # normalize if mask is 0-255
+#mask_np = np.array(mask) / 255.0  # normalize if mask is 0-255
 
 
-fig, axes = plt.subplots(1, 3, figsize=(18, 6), constrained_layout=True)
+fig, axes = plt.subplots(1, 2, figsize=(18, 6), constrained_layout=True)
 
 # --- 1. Input Image ---
 axes[0].imshow(img)
@@ -79,6 +83,8 @@ axes[1].contour(binary_mask_np, colors='white', linewidths=1)
 axes[1].set_title("Input + Predicted Mask", fontsize=16)
 axes[1].axis("off")
 
+
+'''
 # --- 3. Predicted vs True Mask Overlay ---
 axes[2].imshow(img, alpha=0.8)  # base image
 
@@ -104,7 +110,7 @@ axes[2].legend(
     borderaxespad=0,
     fontsize=12
 )
-
+'''
 print(f'Time for Visualization: {(time.time()-start):.3f} s')
 
 plt.show()
