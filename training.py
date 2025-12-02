@@ -76,15 +76,15 @@ def recall_score(preds, targets, threshold=0.5, eps=1e-6):
 
 starting_time = time.time()
 
-model_name = 'unet_Massachusetts'
+model_name = 'unet_AID'
 
 # Initial setup
 device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
  # device = 'cpu'
 print(device)
 
-num_epochs = 100
-batch_size = 32
+num_epochs = 10
+batch_size = 64
 learning_rate = 1e-4
 georef = False
 
@@ -92,24 +92,21 @@ transform = transforms.Compose([
     transforms.ToTensor(),
 ])
 
+dataset_path = '/home/antoniocorvino/Projects/BuildingsExtraction/datasets/'
+dataset_kind = 'AerialImageDataset'
 # Dataset and DataLoader
-train_dataset = MyDataset(image_dir="dataset/training/images",
-                          mask_dir="dataset/training/masks",
+train_dataset = MyDataset(image_dir=dataset_path + dataset_kind + '/tiles/train/images',
+                          mask_dir=dataset_path + dataset_kind + '/tiles/train/gt',
                           transform=transform)
-
-# Massachusetts Dataset
-train_dataset = MyDataset(image_dir='../BuildingsHeight/datasets/tiles/train',
-                          mask_dir='../BuildingsHeight/datasets/tiles/train_labels',
-                          transform=transform)
-
 
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
-val_dataset = MyDataset(image_dir="../BuildingsHeight/datasets/tiles/val",
-                        mask_dir="../BuildingsHeight/datasets/tiles/val_labels",
-                        transform=transform)
+val_dataset = MyDataset(image_dir=dataset_path + dataset_kind + '/tiles/val/images',
+                          mask_dir=dataset_path + dataset_kind + '/tiles/val/gt',
+                          transform=transform)
 
 val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
 
 print(f'Training dataset dimension: {len(train_dataset)}')
 print(f'Validation dataset dimension: {len(val_dataset)}')
@@ -121,7 +118,7 @@ criterion = nn.BCEWithLogitsLoss()
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 # Saving metrics
-csv_metrics = f"runs/metrics_{model_name}.csv"
+csv_metrics = f"/home/antoniocorvino/Projects/BuildingsExtraction/runs/metrics_{model_name}.csv"
 
 with open(csv_metrics, mode='w', newline='') as f:
     writer_csv = csv.writer(f)
@@ -162,9 +159,11 @@ for epoch in range(num_epochs):
         prec_total += precision_score(outputs, masks)
         recall_total += recall_score(outputs, masks)
 
-        if batch_number % 10 == 0:
-            print(f'{(100 * (batch_number/len(train_loader))):.0f}%')
-
+        if (batch_number == 350):
+            checkpoint_time = start_time
+        if batch_number % 350 == 0:
+            print(f'{(100 * (batch_number/len(train_loader))):.0f}% -- time: {(time.time()-checkpoint_time):.0f} s')
+            checkpoint_time = time.time()
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -225,5 +224,5 @@ for epoch in range(num_epochs):
                              epoch_val_loss, val_dice, val_iou, val_pixel_acc, val_prec, val_recall,
                              round(elapsed_time, 2)])
 # Save the model
-torch.save(model.state_dict(), f"runs/{model_name}.pth")
+torch.save(model.state_dict(), f"/home/antoniocorvino/Projects/BuildingsExtraction/runs/{model_name}.pth")
 print(f'Total time: {((time.time() - starting_time)/60):.2f} minutes')
