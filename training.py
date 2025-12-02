@@ -84,7 +84,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.ba
 print(device)
 
 num_epochs = 10
-batch_size = 64
+batch_size = 128
 learning_rate = 1e-4
 georef = False
 
@@ -92,7 +92,7 @@ transform = transforms.Compose([
     transforms.ToTensor(),
 ])
 
-dataset_path = '/home/antoniocorvino/Projects/BuildingsExtraction/datasets/'
+dataset_path = '/mnt/nas151/sar/Footprint/datasets/'
 dataset_kind = 'AerialImageDataset'
 # Dataset and DataLoader
 train_dataset = MyDataset(image_dir=dataset_path + dataset_kind + '/tiles/train/images',
@@ -107,10 +107,13 @@ val_dataset = MyDataset(image_dir=dataset_path + dataset_kind + '/tiles/val/imag
 
 val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
+tot_batches = int(len(train_dataset)/batch_size)
 
 print(f'Training dataset dimension: {len(train_dataset)}')
 print(f'Validation dataset dimension: {len(val_dataset)}')
 
+print(f"Batch size: {batch_size}")
+print(f"Number of batches: {tot_batches}")
 
 # model initialization, loss and optimizer
 model = model_loaded(n_channels=3, n_classes=1).to(device)
@@ -128,8 +131,16 @@ with open(csv_metrics, mode='w', newline='') as f:
                          "time"])
 
 
+if torch.cuda.is_available():
+    gpu_id = torch.cuda.current_device()
+    print(f"\nGPU ID: {gpu_id}")
+    print(f"GPU Total Memory: {(torch.cuda.get_device_properties(gpu_id).total_memory)/1024**3:.2f} GB")
+
+print("\nTraining is started...\n")
+
 # Training loop
 for epoch in range(num_epochs):
+    print(f"GPU Memory Allocated: {torch.cuda.memory_allocated()/1024**3:.2f} GB")
     start_time = time.time()
     model.train()
 
@@ -159,10 +170,10 @@ for epoch in range(num_epochs):
         prec_total += precision_score(outputs, masks)
         recall_total += recall_score(outputs, masks)
 
-        if (batch_number == 350):
+        if batch_number == int(0.1 * tot_batches):
             checkpoint_time = start_time
-        if batch_number % 350 == 0:
-            print(f'{(100 * (batch_number/len(train_loader))):.0f}% -- time: {(time.time()-checkpoint_time):.0f} s')
+        if batch_number % int(0.1 * tot_batches) == 0:
+            print(f'\rProgress: {(100 * batch_number/tot_batches):.0f}% -- time: {(time.time()-checkpoint_time):.0f} s', end="")
             checkpoint_time = time.time()
         optimizer.zero_grad()
         loss.backward()
