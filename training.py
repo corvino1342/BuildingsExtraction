@@ -1,9 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from torchvision import transforms
 from dataset import MyDataset
+import numpy as np
 
 import time
 import csv
@@ -83,6 +84,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.ba
  # device = 'cpu'
 print(device)
 
+dataset_portion = 0.2
+
 num_epochs = 10
 batch_size = 128
 learning_rate = 1e-4
@@ -95,11 +98,20 @@ transform = transforms.Compose([
 dataset_path = '/mnt/nas151/sar/Footprint/datasets/'
 dataset_kind = 'AerialImageDataset'
 # Dataset and DataLoader
-train_dataset = MyDataset(image_dir=dataset_path + dataset_kind + '/tiles/train/images',
+train_dataset_full = MyDataset(image_dir=dataset_path + dataset_kind + '/tiles/train/images',
                           mask_dir=dataset_path + dataset_kind + '/tiles/train/gt',
                           transform=transform)
 
+# In order to twy with less images, this part will mix and select a portion (dataset_portion) of the entire training dataset.
+num_samples = len(train_dataset_full)
+subset_size = int(dataset_portion * num_samples)
+
+indices = np.random.permutation(num_samples)[:subset_size]
+
+train_dataset = Subset(train_dataset_full, indices)
+
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
 
 val_dataset = MyDataset(image_dir=dataset_path + dataset_kind + '/tiles/val/images',
                           mask_dir=dataset_path + dataset_kind + '/tiles/val/gt',
