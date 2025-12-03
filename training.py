@@ -56,7 +56,7 @@ model_name = 'unet_AID'
 
 # Initial setup
 device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
- # device = 'cpu'
+# device = 'cpu'
 print(f"Device: {device}\n")
 
 dataset_portion = 0.1
