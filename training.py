@@ -29,8 +29,6 @@ import csv
 
 from unet import UNet1
 
-model_loaded = UNet1
-
 def iou_score(preds, targets, threshold=0.5, eps=1e-6):
     preds = torch.sigmoid(preds)
     preds = (preds > threshold).float()
@@ -105,7 +103,7 @@ print(f"Batch size: {batch_size}")
 print(f"Number of batches: {tot_batches}")
 
 # model initialization, loss and optimizer
-model = model_loaded(n_channels=3, n_classes=1).to(device)
+model = UNet1(n_channels=3, n_classes=1).to(device)
 criterion = nn.BCEWithLogitsLoss()
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
@@ -115,8 +113,8 @@ csv_metrics = f"/home/antoniocorvino/Projects/BuildingsExtraction/runs/metrics_{
 with open(csv_metrics, mode='w', newline='') as f:
     writer_csv = csv.writer(f)
     writer_csv.writerow(["epoch",
-                         "train_epoch_loss", "train_dice", "train_iou", "train_pixel_acc", "train_precision", "train_recall",
-                         "val_epoch_loss", "val_dice", "val_iou", "val_pixel_acc", "val_precision", "val_recall",
+                         "train_epoch_loss", "train_iou", "train_precision", "train_recall",
+                         "val_epoch_loss", "val_iou", "val_precision", "val_recall",
                          "time"])
 
 
@@ -130,7 +128,7 @@ if torch.cuda.is_available():
 for epoch in range(num_epochs):
     print(f"EPOCH ---- {epoch+1}/{num_epochs}")
     print("\nTraining is started...\n")
-    print(f"Memory Allocated: {torch.cuda.memory_allocated(device)/1024**3:.2f} GB")
+    print(f"Memory Allocated: {torch.cuda.memory_allocated(gpu_id)/1024**3:.2f} GB")
     start_time = time.time()
     model.train()
 
@@ -147,7 +145,9 @@ for epoch in range(num_epochs):
         print(f"Batch #{batch_number}")
         images = images.to(device)
         masks = masks.to(device).float()  # This must be "float" for the loss function
-        print(f"Memory occupied: {torch.cuda.memory_allocated(device)/1024**2:.2f} MB")
+
+        print(f"Memory occupied by the batch: {torch.cuda.memory_allocated(gpu_id)/1024**2:.2f} MB")
+
 
         batch_memory = images.element_size() * images.nelement() + masks.element_size() * masks.nelement()
         print(f"Memory occupied by the batch (images and masks only): {batch_memory / 1024 ** 2:.2f} MB")
