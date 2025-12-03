@@ -61,10 +61,10 @@ device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.ba
  # device = 'cpu'
 print(f"Device: {device}\n")
 
-dataset_portion = 0.5
+dataset_portion = 0.1
 
 num_epochs = 20
-batch_size = 128
+batch_size = 4
 learning_rate = 1e-4
 georef = False
 
@@ -141,28 +141,34 @@ for epoch in range(num_epochs):
     recall_total = 0.0
 
     for images, masks in train_loader:
+        torch.cuda.empty_cache()
         batch_number += 1
 
         print(f"Batch #{batch_number}")
         images = images.to(device)
         masks = masks.to(device).float()  # This must be "float" for the loss function
-        print(f"Memory occupied by the batch: {torch.cuda.memory_allocated(device)/1024**2:.2f} MB")
+        print(f"Memory occupied: {torch.cuda.memory_allocated(device)/1024**2:.2f} MB")
 
         batch_memory = images.element_size() * images.nelement() + masks.element_size() * masks.nelement()
-        print(f"Memory occupied by the batch (estimation): {batch_memory / 1024 ** 2:.2f} MB")
+        print(f"Memory occupied by the batch (images and masks only): {batch_memory / 1024 ** 2:.2f} MB")
 
         outputs = model(images)
 
+
+        print("checkpoint")
         loss = criterion(outputs, masks)
+        print("checkpoint")
 
         iou_total += iou_score(outputs, masks)
         prec_total += precision_score(outputs, masks)
         recall_total += recall_score(outputs, masks)
+        print("checkpoint")
 
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        print("checkpoint")
 
         elapsed_time = time.time() - start_time
 
@@ -170,6 +176,7 @@ for epoch in range(num_epochs):
             print(f"\rProgress: {(100 * batch_number/tot_batches):.0f}% -- time: {int(elapsed_time//60):02d}:{int(elapsed_time%60):02d}", end="")
 
         epoch_train_loss += loss.item()
+        
 
 
     epoch_train_loss /= len(train_loader)
