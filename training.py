@@ -59,7 +59,7 @@ model_name = 'unet_AID'
 # Initial setup
 device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
  # device = 'cpu'
-print(device)
+print(f"Device: {device}\n")
 
 dataset_portion = 0.5
 
@@ -125,11 +125,12 @@ if torch.cuda.is_available():
     print(f"\nGPU ID: {gpu_id}")
     print(f"GPU Total Memory: {(torch.cuda.get_device_properties(gpu_id).total_memory)/1024**3:.2f} GB")
 
-print("\nTraining is started...\n")
 
 # Training loop
 for epoch in range(num_epochs):
-    print(f"EPOCH ---- {epoch}/{num_epochs}")
+    print(f"EPOCH ---- {epoch+1}/{num_epochs}")
+    print("\nTraining is started...\n")
+
     print(f"GPU Memory Allocated: {torch.cuda.memory_allocated()/1024**3:.2f} GB")
     start_time = time.time()
     model.train()
@@ -167,14 +168,14 @@ for epoch in range(num_epochs):
         epoch_train_loss += loss.item()
 
 
-
+    epoch_train_loss /= len(train_loader)
 
     train_iou = (iou_total / len(train_loader)).item()
     train_prec = (prec_total / len(train_loader)).item()
     train_recall = (recall_total / len(train_loader)).item()
 
     print("\n")
-    print("\nValidation Step...")
+    print("\nValidation is started...")
 
 
     # --- VALIDATION STEP ---
