@@ -58,12 +58,15 @@ model_name = 'unet_AID'
 device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 # device = 'cpu'
 print(f"Device: {device}\n")
+memory_fraction = 0.3
 
-dataset_portion = 0.1
 
-num_epochs = 20
-batch_size = 4
-learning_rate = 1e-4
+print(f"Used a fraction of {memory_fraction} GPU's memory")
+dataset_portion = 0.5
+
+num_epochs = 30
+batch_size = 32
+learning_rate = 5e-4
 georef = False
 
 transform = transforms.Compose([
@@ -122,6 +125,7 @@ if torch.cuda.is_available():
     gpu_id = torch.cuda.current_device()
     print(f"\nGPU ID: {gpu_id}")
     print(f"GPU Total Memory: {(torch.cuda.get_device_properties(gpu_id).total_memory)/1024**3:.2f} GB")
+    torch.cuda.set_per_process_memory_fraction(memory_fraction, device=gpu_id)
 
 
 # Training loop
@@ -129,6 +133,7 @@ for epoch in range(num_epochs):
     print(f"EPOCH ---- {epoch+1}/{num_epochs}")
     print("\nTraining is started...\n")
     print(f"Memory Allocated: {torch.cuda.memory_allocated(gpu_id)/1024**3:.2f} GB")
+    print(f"Memory Reserved: {torch.cuda.memory_reserved(gpu_id)/1024**3:.2f} GB")
     start_time = time.time()
     model.train()
 
@@ -139,36 +144,35 @@ for epoch in range(num_epochs):
     recall_total = 0.0
 
     for images, masks in train_loader:
-        torch.cuda.empty_cache()
+        
         batch_number += 1
 
-        print(f"Batch #{batch_number}")
+        #print(f"\nBatch #{batch_number}")
         images = images.to(device)
         masks = masks.to(device).float()  # This must be "float" for the loss function
 
-        print(f"Memory occupied by the batch: {torch.cuda.memory_allocated(gpu_id)/1024**2:.2f} MB")
-
-
-        batch_memory = images.element_size() * images.nelement() + masks.element_size() * masks.nelement()
-        print(f"Memory occupied by the batch (images and masks only): {batch_memory / 1024 ** 2:.2f} MB")
+        #print(f"Memory allocated by the batch: {torch.cuda.memory_allocated(gpu_id)/1024**2:.2f} MB")
+        #print(f"Memory reserved by the batch: {torch.cuda.memory_reserved(gpu_id)/1024**2:.2f} MB")
+        #batch_memory = images.element_size() * images.nelement() + masks.element_size() * masks.nelement()
+        #print(f"Memory occupied by the batch (images and masks only): {batch_memory / 1024 ** 2:.2f} MB")
 
         outputs = model(images)
 
 
-        print("checkpoint")
+        
         loss = criterion(outputs, masks)
-        print("checkpoint")
+        
 
         iou_total += iou_score(outputs, masks)
         prec_total += precision_score(outputs, masks)
         recall_total += recall_score(outputs, masks)
-        print("checkpoint")
+        
 
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        print("checkpoint")
+       
 
         elapsed_time = time.time() - start_time
 
@@ -176,7 +180,7 @@ for epoch in range(num_epochs):
             print(f"\rProgress: {(100 * batch_number/tot_batches):.0f}% -- time: {int(elapsed_time//60):02d}:{int(elapsed_time%60):02d}", end="")
 
         epoch_train_loss += loss.item()
-        
+        torch.cuda.empty_cache()
 
 
     epoch_train_loss /= len(train_loader)
