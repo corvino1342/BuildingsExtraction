@@ -130,8 +130,7 @@ if torch.cuda.is_available():
 for epoch in range(num_epochs):
     print(f"EPOCH ---- {epoch+1}/{num_epochs}")
     print("\nTraining is started...\n")
-
-    print(f"GPU Memory Allocated: {torch.cuda.memory_allocated()/1024**3:.2f} GB")
+    print(f"Memory Allocated: {torch.cuda.memory_allocated(device)/1024**3:.2f} GB")
     start_time = time.time()
     model.train()
 
@@ -144,8 +143,13 @@ for epoch in range(num_epochs):
     for images, masks in train_loader:
         batch_number += 1
 
+        print(f"Batch #{batch_number}")
         images = images.to(device)
         masks = masks.to(device).float()  # This must be "float" for the loss function
+        print(f"Memory occupied by the batch: {torch.cuda.memory_allocated(device)/1024**2:.2f} MB")
+
+        batch_memory = images.element_size() * images.nelement() + masks.element_size() * masks.nelement()
+        print(f"Memory occupied by the batch (estimation): {batch_memory / 1024 ** 2:.2f} MB")
 
         outputs = model(images)
 
