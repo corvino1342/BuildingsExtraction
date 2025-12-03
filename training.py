@@ -148,28 +148,30 @@ for epoch in range(num_epochs):
 
         outputs = model(images)
 
-        # LOSS SCORE
         loss = criterion(outputs, masks)
 
         iou_total += iou_score(outputs, masks)
         prec_total += precision_score(outputs, masks)
         recall_total += recall_score(outputs, masks)
 
-        if batch_number % int(0.1 * tot_batches) == 0:
-            print(f'\rProgress: {(100 * batch_number/tot_batches):.0f}% -- time: {(time.time()-start_time):.0f} s', end="")
+
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
+        elapsed_time = time.time() - start_time
+
+        if batch_number % int(0.1 * tot_batches) == 0:
+            print(f"\rProgress: {(100 * batch_number/tot_batches):.0f}% -- time: {int(elapsed_time//60):.02d}:{int(elapsed_time%60):.02d}", end="")
+
         epoch_train_loss += loss.item()
 
-    	elapsed_time = time.time() - start_time
 
     train_iou = (iou_total / len(train_loader)).item()
     train_prec = (prec_total / len(train_loader)).item()
     train_recall = (recall_total / len(train_loader)).item()
 
-    print(f"\nTime spent for the epoch: {elapsed_time:.2f} seconds")
+    print(f"\nTime spent for the epoch: {(elapsed_time/60):.2f} minutes")
 
 
     # --- VALIDATION STEP ---
@@ -205,8 +207,8 @@ for epoch in range(num_epochs):
     with open(csv_metrics, mode='a', newline='') as f:
         writer_csv = csv.writer(f)
         writer_csv.writerow([epoch + 1,
-                             epoch_train_loss, train_dice, train_iou, train_pixel_acc, train_prec, train_recall,
-                             epoch_val_loss, val_dice, val_iou, val_pixel_acc, val_prec, val_recall,
+                             epoch_train_loss, train_iou, train_prec, train_recall,
+                             epoch_val_loss, val_iou, val_prec, val_recall,
                              round(elapsed_time, 2)])
 # Save the model
 torch.save(model.state_dict(), f"/home/antoniocorvino/Projects/BuildingsExtraction/runs/{model_name}.pth")
