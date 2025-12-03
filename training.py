@@ -31,35 +31,12 @@ from unet import UNet1
 
 model_loaded = UNet1
 
-
-def dice_score(preds, targets, threshold=0.5, eps=1e-6):
-    """
-    Computes the Dice coefficient.
-    preds: predicted logits (before sigmoid)
-    targets: ground truth masks
-    """
-    preds = torch.sigmoid(preds)
-    preds = (preds > threshold).float()
-
-    intersection = (preds * targets).sum(dim=(1, 2, 3))
-    union = preds.sum(dim=(1, 2, 3)) + targets.sum(dim=(1, 2, 3))
-
-    dice = (2. * intersection + eps) / (union + eps)
-    return dice.mean()
-
 def iou_score(preds, targets, threshold=0.5, eps=1e-6):
     preds = torch.sigmoid(preds)
     preds = (preds > threshold).float()
     intersection = (preds * targets).sum(dim=(1, 2, 3))
     union = preds.sum(dim=(1, 2, 3)) + targets.sum(dim=(1, 2, 3)) - intersection
     return ((intersection + eps) / (union + eps)).mean()
-
-def pixel_accuracy(preds, targets, threshold=0.5):
-    preds = torch.sigmoid(preds)
-    preds = (preds > threshold).float()
-    correct = (preds == targets).float().sum()
-    total = torch.numel(preds)
-    return correct / total
 
 def precision_score(preds, targets, threshold=0.5, eps=1e-6):
     preds = torch.sigmoid(preds)
@@ -84,9 +61,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.ba
  # device = 'cpu'
 print(device)
 
-dataset_portion = 0.2
+dataset_portion = 0.05
 
-num_epochs = 10
+num_epochs = 30
 batch_size = 128
 learning_rate = 1e-4
 georef = False
@@ -152,15 +129,14 @@ print("\nTraining is started...\n")
 
 # Training loop
 for epoch in range(num_epochs):
+    print(f"EPOCH ---- {epoch}/{num_epochs}")
     print(f"GPU Memory Allocated: {torch.cuda.memory_allocated()/1024**3:.2f} GB")
     start_time = time.time()
     model.train()
 
     epoch_train_loss = 0.0
     batch_number = 0
-    train_dice = 0.0
     iou_total = 0.0
-    pixel_acc_total = 0.0
     prec_total = 0.0
     recall_total = 0.0
 
@@ -175,42 +151,31 @@ for epoch in range(num_epochs):
         # LOSS SCORE
         loss = criterion(outputs, masks)
 
-        # DICE SCORE
-        train_dice += dice_score(outputs, masks)
         iou_total += iou_score(outputs, masks)
-        pixel_acc_total += pixel_accuracy(outputs, masks)
         prec_total += precision_score(outputs, masks)
         recall_total += recall_score(outputs, masks)
 
-        if batch_number == int(0.1 * tot_batches):
-            checkpoint_time = start_time
         if batch_number % int(0.1 * tot_batches) == 0:
-            print(f'\rProgress: {(100 * batch_number/tot_batches):.0f}% -- time: {(time.time()-checkpoint_time):.0f} s', end="")
-            checkpoint_time = time.time()
+            print(f'\rProgress: {(100 * batch_number/tot_batches):.0f}% -- time: {(time.time()-start_time):.0f} s', end="")
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
         epoch_train_loss += loss.item()
 
-    elapsed_time = time.time() - start_time
+    	elapsed_time = time.time() - start_time
 
-    train_dice = (train_dice / len(train_loader)).item()
     train_iou = (iou_total / len(train_loader)).item()
-    train_pixel_acc = (pixel_acc_total / len(train_loader)).item()
     train_prec = (prec_total / len(train_loader)).item()
     train_recall = (recall_total / len(train_loader)).item()
 
-    print(f"\nEpoch {epoch+1}/{num_epochs} ----- Time spent: {elapsed_time:.2f} seconds")
+    print(f"\nTime spent for the epoch: {elapsed_time:.2f} seconds")
 
-    print(f'Training - Loss: {epoch_train_loss:.4f}, Precision: {train_prec:.4f}, Recall: {train_recall:.4f}')
 
     # --- VALIDATION STEP ---
     model.eval()
     epoch_val_loss = 0.0
-    val_dice = 0.0
     val_iou = 0.0
-    val_pixel_acc = 0.0
     val_prec = 0.0
     val_recall = 0.0
 
@@ -223,21 +188,18 @@ for epoch in range(num_epochs):
             loss_val = criterion(val_outputs, val_masks)
             epoch_val_loss += loss_val.item()
 
-            val_dice += dice_score(val_outputs, val_masks)
             val_iou += iou_score(val_outputs, val_masks)
-            val_pixel_acc += pixel_accuracy(val_outputs, val_masks)
             val_prec += precision_score(val_outputs, val_masks)
             val_recall += recall_score(val_outputs, val_masks)
 
     # Average validation metrics
     epoch_val_loss /= len(val_loader)
-    val_dice = (val_dice / len(val_loader)).item()
     val_iou = (val_iou / len(val_loader)).item()
-    val_pixel_acc = (val_pixel_acc / len(val_loader)).item()
     val_prec = (val_prec / len(val_loader)).item()
     val_recall = (val_recall / len(val_loader)).item()
 
-    print(f"Validation - Loss: {epoch_val_loss:.4f}, Precision: {val_prec:.4f}, Recall: {val_recall:.4f}\n\n")
+    print(f'TRAINING - Loss: {epoch_train_loss:.4f}\tIntersection Over Union: {train_iou:.4f}\tPrecision: {train_prec:.4f}\tRecall: {train_recall:.4f}')
+    print(f"VALIDATION - Loss: {epoch_val_loss:.4f}\tIntersection Over Union: {val_iou:.4f}\tPrecision: {val_prec:.4f}\tRecall: {val_recall:.4f}\n\n")
 
     # Save metrics to CSV
     with open(csv_metrics, mode='a', newline='') as f:
