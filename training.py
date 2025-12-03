@@ -61,9 +61,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.ba
  # device = 'cpu'
 print(device)
 
-dataset_portion = 0.05
+dataset_portion = 0.5
 
-num_epochs = 30
+num_epochs = 20
 batch_size = 128
 learning_rate = 1e-4
 georef = False
@@ -162,19 +162,23 @@ for epoch in range(num_epochs):
         elapsed_time = time.time() - start_time
 
         if batch_number % int(0.1 * tot_batches) == 0:
-            print(f"\rProgress: {(100 * batch_number/tot_batches):.0f}% -- time: {int(elapsed_time//60):.02d}:{int(elapsed_time%60):.02d}", end="")
+            print(f"\rProgress: {(100 * batch_number/tot_batches):.0f}% -- time: {int(elapsed_time//60):02d}:{int(elapsed_time%60):02d}", end="")
 
         epoch_train_loss += loss.item()
+
+
 
 
     train_iou = (iou_total / len(train_loader)).item()
     train_prec = (prec_total / len(train_loader)).item()
     train_recall = (recall_total / len(train_loader)).item()
 
-    print(f"\nTime spent for the epoch: {(elapsed_time/60):.2f} minutes")
+    print("\n")
+    print("\nValidation Step...")
 
 
     # --- VALIDATION STEP ---
+    starting_val = time.time()
     model.eval()
     epoch_val_loss = 0.0
     val_iou = 0.0
@@ -200,8 +204,10 @@ for epoch in range(num_epochs):
     val_prec = (val_prec / len(val_loader)).item()
     val_recall = (val_recall / len(val_loader)).item()
 
-    print(f'TRAINING - Loss: {epoch_train_loss:.4f}\tIntersection Over Union: {train_iou:.4f}\tPrecision: {train_prec:.4f}\tRecall: {train_recall:.4f}')
-    print(f"VALIDATION - Loss: {epoch_val_loss:.4f}\tIntersection Over Union: {val_iou:.4f}\tPrecision: {val_prec:.4f}\tRecall: {val_recall:.4f}\n\n")
+    print(f"\nTime for Validation: {int(time.time() - starting_val):02d}s\n")
+
+    print(f'\nTRAINING\tLoss: {epoch_train_loss:.4f}\tIoU: {train_iou:.4f}\tPrecision: {train_prec:.4f}\tRecall: {train_recall:.4f}')
+    print(f"VALIDATION\tLoss: {epoch_val_loss:.4f}\tIoU: {val_iou:.4f}\tPrecision: {val_prec:.4f}\tRecall: {val_recall:.4f}\n\n")
 
     # Save metrics to CSV
     with open(csv_metrics, mode='a', newline='') as f:
