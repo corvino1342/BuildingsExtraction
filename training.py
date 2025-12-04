@@ -9,7 +9,6 @@ import numpy as np
 import time
 import csv
 
-from generate_building_dataset import tile_dimension
 # Which model I have to choose?
 
 # UNet1
@@ -53,22 +52,25 @@ def recall_score(preds, targets, threshold=0.5, eps=1e-6):
 
 starting_time = time.time()
 
-model_name = 'unet_AID'
+
+model_dataset = 'AID'
+tile_dimension = 128
+batch_size = 128
+
+
 
 # Initial setup
 device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 # device = 'cpu'
 print(f"Device: {device}\n")
 memory_fraction = 0.3
-
-
 print(f"Used a fraction of {memory_fraction} GPU's memory")
-dataset_portion = 0.5
 
-num_epochs = 30
-batch_size = 32
-learning_rate = 5e-4
-georef = False
+
+training_dataset_portion = 0.5
+validation_dataset_portion = 0.3
+num_epochs = 50
+learning_rate = 1e-4
 
 transform = transforms.Compose([
     transforms.ToTensor(),
@@ -76,41 +78,49 @@ transform = transforms.Compose([
 
 dataset_path = '/mnt/nas151/sar/Footprint/datasets/'
 dataset_kind = 'AerialImageDataset'
-tile_dimension = 128
 # Dataset and DataLoader
-train_dataset_full = MyDataset(image_dir=dataset_path + dataset_kind + '/tiles_{tile_dimension}/train/images',
-                          mask_dir=dataset_path + dataset_kind + '/tiles_{tile_dimension}/train/gt',
+train_dataset_full = MyDataset(image_dir=dataset_path + dataset_kind + f'/tiles_{tile_dimension}/train/images',
+                          mask_dir=dataset_path + dataset_kind + f'/tiles_{tile_dimension}/train/gt',
                           transform=transform)
 
 # In order to train with fewer images, this part will mix and select a portion (dataset_portion) of the entire training dataset.
 num_samples = len(train_dataset_full)
-subset_size = int(dataset_portion * num_samples)
-
+subset_size = int(training_dataset_portion * num_samples)
 indices = np.random.permutation(num_samples)[:subset_size]
-
 train_dataset = Subset(train_dataset_full, indices)
 
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
 
-val_dataset = MyDataset(image_dir=dataset_path + dataset_kind + '/tiles_{tile_dimension}/val/images',
-                          mask_dir=dataset_path + dataset_kind + '/tiles_{tile_dimension}/val/gt',
+val_dataset_full = MyDataset(image_dir=dataset_path + dataset_kind + f'/tiles_{tile_dimension}/val/images',
+                          mask_dir=dataset_path + dataset_kind + f'/tiles_{tile_dimension}/val/gt',
                           transform=transform)
+
+# In order to train with fewer images, this part will mix and select a portion (dataset_portion) of the entire training dataset.
+num_samples = len(val_dataset_full)
+subset_size = int(validation_dataset_portion * num_samples)
+indices = np.random.permutation(num_samples)[:subset_size]
+val_dataset = Subset(val_dataset_full, indices)
 
 val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
 tot_batches = int(len(train_dataset)/batch_size)
 
+print(f"Tiles Dimension: {tile_dimension}x{tile_dimension}")
+
 print(f'Training dataset dimension: {len(train_dataset)}')
 print(f'Validation dataset dimension: {len(val_dataset)}')
 
-print(f"Batch size: {batch_size}")
-print(f"Number of batches: {tot_batches}")
+print(f"{tot_batches} batches of {batch_size} images")
 
 # model initialization, loss and optimizer
 model = UNet1(n_channels=3, n_classes=1).to(device)
 criterion = nn.BCEWithLogitsLoss()
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+
+
+model_name = f'unet_{model_dataset}_{num_epochs}_{len(train_dataset)}_{tile_dimension}_{batch_size}'
+
 
 # Saving metrics
 csv_metrics = f"/home/antoniocorvino/Projects/BuildingsExtraction/runs/metrics_{model_name}.csv"
