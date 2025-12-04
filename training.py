@@ -9,6 +9,7 @@ import numpy as np
 import time
 import csv
 
+from generate_building_dataset import tile_dimension
 # Which model I have to choose?
 
 # UNet1
@@ -75,12 +76,13 @@ transform = transforms.Compose([
 
 dataset_path = '/mnt/nas151/sar/Footprint/datasets/'
 dataset_kind = 'AerialImageDataset'
+tile_dimension = 128
 # Dataset and DataLoader
-train_dataset_full = MyDataset(image_dir=dataset_path + dataset_kind + '/tiles/train/images',
-                          mask_dir=dataset_path + dataset_kind + '/tiles/train/gt',
+train_dataset_full = MyDataset(image_dir=dataset_path + dataset_kind + '/tiles_{tile_dimension}/train/images',
+                          mask_dir=dataset_path + dataset_kind + '/tiles_{tile_dimension}/train/gt',
                           transform=transform)
 
-# In order to twy with less images, this part will mix and select a portion (dataset_portion) of the entire training dataset.
+# In order to train with fewer images, this part will mix and select a portion (dataset_portion) of the entire training dataset.
 num_samples = len(train_dataset_full)
 subset_size = int(dataset_portion * num_samples)
 
@@ -91,8 +93,8 @@ train_dataset = Subset(train_dataset_full, indices)
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
 
-val_dataset = MyDataset(image_dir=dataset_path + dataset_kind + '/tiles/val/images',
-                          mask_dir=dataset_path + dataset_kind + '/tiles/val/gt',
+val_dataset = MyDataset(image_dir=dataset_path + dataset_kind + '/tiles_{tile_dimension}/val/images',
+                          mask_dir=dataset_path + dataset_kind + '/tiles_{tile_dimension}/val/gt',
                           transform=transform)
 
 val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
@@ -124,7 +126,7 @@ with open(csv_metrics, mode='w', newline='') as f:
 if torch.cuda.is_available():
     gpu_id = torch.cuda.current_device()
     print(f"\nGPU ID: {gpu_id}")
-    print(f"GPU Total Memory: {(torch.cuda.get_device_properties(gpu_id).total_memory)/1024**3:.2f} GB")
+    print(f"GPU Total Memory: {torch.cuda.get_device_properties(gpu_id).total_memory/1024**3:.2f} GB")
     torch.cuda.set_per_process_memory_fraction(memory_fraction, device=gpu_id)
 
 
