@@ -36,10 +36,7 @@ def tiles_creation(dataset_name, dataset_path, tile_measure, maps_to_use):
 
 
         for name in full_maps:
-
-
             image = Image.open(f'/home/antoniocorvino/Projects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/images/{name}.tif')
-
             if gt:
                 mask = Image.open(f'/home/antoniocorvino/Projects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/gt/{name}.tif')
 
@@ -73,12 +70,11 @@ def tiles_creation(dataset_name, dataset_path, tile_measure, maps_to_use):
 # QUINDI, FARE TIPO LA SOMMA SUI PIXEL DELLE MASCHERE E POI DIVIDERE PER LA DIMENSIONE DELLA TILE. SE IL RISULTATO È CIRCA 0.5
 # ALLORA POSSO PENSARE CHE IL DATASET SIA BILANCIATO, CREDO
 
-
 server_path = '/home/antoniocorvino/Projects/BuildingsExtraction/datasets'
 nas_path = '/mnt/nas151/sar/Footprint/datasets'
 
 massachusetts_dataset_name = 'MassachusettsBuildingsDataset'
 aerial_dataset_name = 'AerialImageDataset'
 
-clear_tiles_directory(aerial_dataset_name, nas_path)
-tiles_creation(aerial_dataset_name, nas_path, tile_measure=256, maps_to_use=140)
+clear_tiles_directory(aerial_dataset_name, server_path)
+tiles_creation(aerial_dataset_name, server_path, tile_measure=128, maps_to_use=1)
