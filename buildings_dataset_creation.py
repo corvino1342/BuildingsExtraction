@@ -6,7 +6,7 @@ import shutil
 def clear_tiles_directory(dataset_name, dataset_path, tile_measure):
     if os.path.exists(f'{dataset_path}/{dataset_name}/tiles_{tile_measure}'):
         print('Previous tiles erasing...')
-        shutil.rmtree(f'{dataset_path}/{dataset_name}/tiles_tile_measure}')
+        shutil.rmtree(f'{dataset_path}/{dataset_name}/tiles_{tile_measure}')
         print('DONE!\n\n\n')
     os.makedirs(f'{dataset_path}/{dataset_name}/tiles_{tile_measure}')
 
@@ -63,7 +63,7 @@ def tiles_creation(dataset_name, dataset_path, tile_measure, maps_to_use):
                     image_tile.save(f'{dataset_path}/{dataset_name}/tiles_{tile_measure}/{dataset_type}/images/{name}_{count}.tif')
                     if gt:
                         mask_tile.save(f'{dataset_path}/{dataset_name}/tiles_{tile_measure}/{dataset_type}/gt/{name}_{count}.tif')
-            print(f'{name} DONE!\n\n')
+            print(f'{name} DONE!\nTiles created:\t{count}\n')
 
 
 # DEVO PROVARE A CALCOLARE LA MEDIA DEL VALORE DELLE MASCHERE PER CAPIRE SE SONO BILANCIATI I DATI
