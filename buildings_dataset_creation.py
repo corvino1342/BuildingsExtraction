@@ -3,12 +3,12 @@ import os
 import shutil
 
 
-def clear_tiles_directory(dataset_name, dataset_path):
-    if os.path.exists(f'{dataset_path}/{dataset_name}/tiles'):
+def clear_tiles_directory(dataset_name, dataset_path, tile_measure):
+    if os.path.exists(f'{dataset_path}/{dataset_name}/tiles_{tile_measure}'):
         print('Previous tiles erasing...')
-        shutil.rmtree(f'{dataset_path}/{dataset_name}/tiles')
+        shutil.rmtree(f'{dataset_path}/{dataset_name}/tiles_tile_measure}')
         print('DONE!\n\n\n')
-    os.makedirs(f'{dataset_path}/{dataset_name}/tiles')
+    os.makedirs(f'{dataset_path}/{dataset_name}/tiles_{tile_measure}')
 
 
 def tiles_creation(dataset_name, dataset_path, tile_measure, maps_to_use):
@@ -24,9 +24,9 @@ def tiles_creation(dataset_name, dataset_path, tile_measure, maps_to_use):
             print(f'---------{dataset_type} dataset has not Ground Truth---------')
             gt = False
 
-        os.makedirs(f'{dataset_path}/{dataset_name}/tiles/{dataset_type}/', exist_ok=True)
-        os.makedirs(f'{dataset_path}/{dataset_name}/tiles/{dataset_type}/images', exist_ok=True)
-        os.makedirs(f'{dataset_path}/{dataset_name}/tiles/{dataset_type}/gt', exist_ok=True)
+        os.makedirs(f'{dataset_path}/{dataset_name}/tiles_{tile_measure}/{dataset_type}/', exist_ok=True)
+        os.makedirs(f'{dataset_path}/{dataset_name}/tiles_{tile_measure}/{dataset_type}/images', exist_ok=True)
+        os.makedirs(f'{dataset_path}/{dataset_name}/tiles_{tile_measure}/{dataset_type}/gt', exist_ok=True)
 
         full_maps = sorted(os.path.splitext(f)[0] for f in os.listdir(f'datasets/{dataset_name}/{dataset_type}/images') if f.lower().endswith(('.tif', '.tiff', '.png', '.jpg')))
 
@@ -60,9 +60,9 @@ def tiles_creation(dataset_name, dataset_path, tile_measure, maps_to_use):
                         #    continue
                     #print('Tiles skipped: {skipped}/{count} ({(100 * skipped / count):.1f}%)\n\n')
                     image_tile = image.crop(box)
-                    image_tile.save(f'{dataset_path}/{dataset_name}/tiles/{dataset_type}/images/{name}_{count}.tif')
+                    image_tile.save(f'{dataset_path}/{dataset_name}/tiles_{tile_measure}/{dataset_type}/images/{name}_{count}.tif')
                     if gt:
-                        mask_tile.save(f'{dataset_path}/{dataset_name}/tiles/{dataset_type}/gt/{name}_{count}.tif')
+                        mask_tile.save(f'{dataset_path}/{dataset_name}/tiles_{tile_measure}/{dataset_type}/gt/{name}_{count}.tif')
             print(f'{name} DONE!\n\n')
 
 
@@ -76,5 +76,7 @@ nas_path = '/mnt/nas151/sar/Footprint/datasets'
 massachusetts_dataset_name = 'MassachusettsBuildingsDataset'
 aerial_dataset_name = 'AerialImageDataset'
 
-clear_tiles_directory(aerial_dataset_name, server_path)
-tiles_creation(aerial_dataset_name, server_path, tile_measure=128, maps_to_use=1)
+tile_measure = 128
+
+clear_tiles_directory(aerial_dataset_name, server_path, tile_measure)
+tiles_creation(aerial_dataset_name, server_path, tile_measure, maps_to_use=30)
