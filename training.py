@@ -160,21 +160,15 @@ for epoch in range(num_epochs):
 
         outputs = model(images)
 
-
-        
         loss = criterion(outputs, masks)
-        
 
         iou_total += iou_score(outputs, masks)
         prec_total += precision_score(outputs, masks)
         recall_total += recall_score(outputs, masks)
-        
-
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-       
 
         elapsed_time = time.time() - start_time
 
@@ -184,7 +178,6 @@ for epoch in range(num_epochs):
         epoch_train_loss += loss.item()
         torch.cuda.empty_cache()
 
-
     epoch_train_loss /= len(train_loader)
 
     train_iou = (iou_total / len(train_loader)).item()
@@ -193,7 +186,6 @@ for epoch in range(num_epochs):
 
     print("\n")
     print("\nValidation is started...")
-
 
     # --- VALIDATION STEP ---
     starting_val = time.time()
