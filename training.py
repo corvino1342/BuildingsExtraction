@@ -248,17 +248,19 @@ for epoch in range(num_epochs):
                              epoch_val_loss, val_iou, val_prec, val_recall,
                              round(elapsed_time, 2)])
     # Checkpoint
-    if ((epoch+1) > 9) and ((epoch+1) % 2 == 0) and (epoch_val_loss < best_val_loss):
-	if epoch_val_loss >= best_val_loss:
-		early_stop_counter += 1
-	else:
-		early_stop_counter = 0
-	best_val_loss = epoch_val_loss
-	early_stop_counter = 0
+    if ((epoch+1) > 9) and ((epoch+1) % 2 == 0):
         torch.save(model.state_dict(), f"/home/antoniocorvino/Projects/BuildingsExtraction/runs/{model_name}/checkpoint_{epoch+1}.pth")
+
+    if epoch_val_loss < best_val_loss:
+        best_val_loss = epoch_val_loss
+        counter = 0
+
+        torch.save(model.state_dict(), f"/home/antoniocorvino/Projects/BuildingsExtraction/runs/{model_name}/best_model.pth")
+    else:
+        early_stop_counter += 1
+        print(f"No improvement for {early_stop_counter} epoch(s).")
 
     if early_stop_counter >= patience:
         print("Early stopping triggered.")
         break
-
 print(f'Total time: {((time.time() - starting_time)/60):.2f} minutes')
