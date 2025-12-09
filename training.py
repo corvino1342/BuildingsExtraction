@@ -56,8 +56,8 @@ starting_time = time.time()
 
 
 model_dataset = 'AID'
-tile_dimension = 256
-batch_size = 32
+tile_dimension = 128
+batch_size = 128
 
 
 # Initial setup
@@ -68,8 +68,8 @@ memory_fraction = 0.3
 print(f"Used a fraction of {memory_fraction} GPU's memory")
 
 
-training_dataset_portion = 0.5
-validation_dataset_portion = 0.3
+training_dataset_portion = 0.3
+validation_dataset_portion = 0.03
 num_epochs = 50
 learning_rate = 1e-4
 
@@ -125,8 +125,8 @@ criterion = nn.BCEWithLogitsLoss()
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 
-model_name = f'unet_{model_dataset}_{learning_rate}_{len(train_dataset)}_{tile_dimension}x{tile_dimension}_{batch_size}'
-os.makedirs(model_name, exist_ok=True)
+model_name = f'unet_{model_dataset}_lr{str(learning_rate).replace(".", "p")}_n{len(train_dataset)}_dim{tile_dimension}x{tile_dimension}_bs{batch_size}'
+os.makedirs(f'/home/antoniocorvino/Projects/BuildingsExtraction/runs/{model_name}', exist_ok=True)
 
 # Saving metrics
 csv_metrics = f"/home/antoniocorvino/Projects/BuildingsExtraction/runs/{model_name}/metrics.csv"
@@ -248,14 +248,13 @@ for epoch in range(num_epochs):
                              epoch_val_loss, val_iou, val_prec, val_recall,
                              round(elapsed_time, 2)])
     # Checkpoint
-    if ((epoch+1) > 9) and ((epoch+1) % 2 == 0):
-        torch.save(model.state_dict(), f"/home/antoniocorvino/Projects/BuildingsExtraction/runs/{model_name}/checkpoint_{epoch+1}.pth")
-
-    # Early Stop
-    if epoch_val_loss < best_val_loss:
-        best_val_loss = epoch_val_loss
-        counter = 0
-
+    if ((epoch+1) > 9) and ((epoch+1) % 2 == 0) and (epoch_val_loss < best_val_loss):
+	if epoch_val_loss >= best_val_loss:
+		early_stop_counter += 1
+	else:
+		early_stop_counter = 0
+	best_val_loss = epoch_val_loss
+	early_stop_counter = 0
         torch.save(model.state_dict(), f"/home/antoniocorvino/Projects/BuildingsExtraction/runs/{model_name}/checkpoint_{epoch+1}.pth")
 
     if early_stop_counter >= patience:
