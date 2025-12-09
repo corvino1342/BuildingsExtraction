@@ -172,9 +172,14 @@ for epoch in range(num_epochs):
 
         loss = criterion(outputs, masks)
 
-        iou_total += iou_score(outputs, masks)
-        prec_total += precision_score(outputs, masks)
-        recall_total += recall_score(outputs, masks)
+        with torch.no_grad():
+            iou_batch = iou_score(outputs, masks)
+            prec_batch = precision_score(outputs, masks)
+            recall_batch = recall_score(outputs, masks)
+
+        iou_total += iou_batch
+        prec_total += prec_batch
+        recall_total += recall_batch
 
         optimizer.zero_grad()
         loss.backward()
@@ -186,7 +191,7 @@ for epoch in range(num_epochs):
             print(f"\rProgress: {(100 * batch_number/tot_batches):.0f}% -- time: {int(elapsed_time//60):02d}:{int(elapsed_time%60):02d}", end="")
 
         epoch_train_loss += loss.item()
-        torch.cuda.empty_cache()
+    torch.cuda.empty_cache()
 
     epoch_train_loss /= len(train_loader)
 
