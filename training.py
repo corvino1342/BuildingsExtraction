@@ -1,3 +1,5 @@
+import os
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -71,6 +73,11 @@ validation_dataset_portion = 0.3
 num_epochs = 50
 learning_rate = 1e-4
 
+best_val_loss = float("inf")
+patience = 3
+early_stop_counter = 0
+
+
 transform = transforms.Compose([
     transforms.ToTensor(),
 ])
@@ -118,11 +125,11 @@ criterion = nn.BCEWithLogitsLoss()
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 
-model_name = f'unet_{model_dataset}_{num_epochs}_{len(train_dataset)}_{tile_dimension}x{tile_dimension}_{batch_size}'
-
+model_name = f'unet_{model_dataset}_{learning_rate}_{len(train_dataset)}_{tile_dimension}x{tile_dimension}_{batch_size}'
+os.makedirs(model_name, exist_ok=True)
 
 # Saving metrics
-csv_metrics = f"/home/antoniocorvino/Projects/BuildingsExtraction/runs/metrics_{model_name}.csv"
+csv_metrics = f"/home/antoniocorvino/Projects/BuildingsExtraction/runs/{model_name}/metrics.csv"
 
 with open(csv_metrics, mode='w', newline='') as f:
     writer_csv = csv.writer(f)
@@ -240,6 +247,19 @@ for epoch in range(num_epochs):
                              epoch_train_loss, train_iou, train_prec, train_recall,
                              epoch_val_loss, val_iou, val_prec, val_recall,
                              round(elapsed_time, 2)])
-# Save the model
-torch.save(model.state_dict(), f"/home/antoniocorvino/Projects/BuildingsExtraction/runs/{model_name}.pth")
+    # Checkpoint
+    if ((epoch+1) > 9) and ((epoch+1) % 2 == 0):
+        torch.save(model.state_dict(), f"/home/antoniocorvino/Projects/BuildingsExtraction/runs/{model_name}/checkpoint_{epoch+1}.pth")
+
+    # Early Stop
+    if epoch_val_loss < best_val_loss:
+        best_val_loss = epoch_val_loss
+        counter = 0
+
+        torch.save(model.state_dict(), f"/home/antoniocorvino/Projects/BuildingsExtraction/runs/{model_name}/checkpoint_{epoch+1}.pth")
+
+    if early_stop_counter >= patience:
+        print("Early stopping triggered.")
+        break
+
 print(f'Total time: {((time.time() - starting_time)/60):.2f} minutes')
