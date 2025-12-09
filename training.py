@@ -54,8 +54,8 @@ starting_time = time.time()
 
 
 model_dataset = 'AID'
-tile_dimension = 128
-batch_size = 128
+tile_dimension = 256
+batch_size = 64
 
 
 
@@ -119,7 +119,7 @@ criterion = nn.BCEWithLogitsLoss()
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 
-model_name = f'unet_{model_dataset}_{num_epochs}_{len(train_dataset)}_{tile_dimension}_{batch_size}'
+model_name = f'unet_{model_dataset}_{num_epochs}_{len(train_dataset)}_{tile_dimension}x{tile_dimension}_{batch_size}'
 
 
 # Saving metrics
