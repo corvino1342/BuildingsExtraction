@@ -55,8 +55,7 @@ starting_time = time.time()
 
 model_dataset = 'AID'
 tile_dimension = 256
-batch_size = 64
-
+batch_size = 32
 
 
 # Initial setup
