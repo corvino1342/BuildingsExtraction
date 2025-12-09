@@ -15,12 +15,14 @@ def tiles_creation(dataset_name, dataset_path, tile_measure, maps_to_use):
 
     os.makedirs(f'{dataset_path}/{dataset_name}/tiles', exist_ok=True)
 
-    for dataset_type in ['train', 'val', 'test']:
+    for dataset_type in ['test', 'test', 'test']:
 
         print(f'Dataset type ------- {dataset_type}')
 
         gt = True
-        if not os.path.exists(f'/home/antoniocorvino/Projects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/gt'):
+        #if not os.path.exists(f'/home/antoniocorvino/Projects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/gt'):
+        if not os.path.exists( f'/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/gt'):
+
             print(f'---------{dataset_type} dataset has not Ground Truth---------')
             gt = False
 
@@ -36,9 +38,11 @@ def tiles_creation(dataset_name, dataset_path, tile_measure, maps_to_use):
 
 
         for name in full_maps:
-            image = Image.open(f'/home/antoniocorvino/Projects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/images/{name}.tif')
+            image = Image.open(f'/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/images/{name}.tif')
+            #image = Image.open(f'/home/antoniocorvino/Projects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/images/{name}.tif')
             if gt:
-                mask = Image.open(f'/home/antoniocorvino/Projects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/gt/{name}.tif')
+                mask = Image.open(f'/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/gt/{name}.tif')
+                #mask = Image.open(f'/home/antoniocorvino/Projects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/gt/{name}.tif')
 
             count = 0
 
@@ -72,11 +76,12 @@ def tiles_creation(dataset_name, dataset_path, tile_measure, maps_to_use):
 
 server_path = '/home/antoniocorvino/Projects/BuildingsExtraction/datasets'
 nas_path = '/mnt/nas151/sar/Footprint/datasets'
+local_path = '/Users/corvino/PycharmProjects/BuildingsExtraction/datasets'
 
 massachusetts_dataset_name = 'MassachusettsBuildingsDataset'
 aerial_dataset_name = 'AerialImageDataset'
 
-tile_measure = 128
+tile_measure = 512
 
-clear_tiles_directory(aerial_dataset_name, server_path, tile_measure)
-tiles_creation(aerial_dataset_name, server_path, tile_measure, maps_to_use=30)
+clear_tiles_directory(aerial_dataset_name, local_path, tile_measure)
+tiles_creation(aerial_dataset_name, local_path, tile_measure, maps_to_use=30)
