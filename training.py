@@ -58,7 +58,7 @@ starting_time = time.time()
 model_dataset = 'AID'
 tile_dimension = 128
 batch_size = 128
-
+weightedBCE = True
 
 # Initial setup
 device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
@@ -66,7 +66,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.ba
 print(f"Device: {device}\n")
 memory_fraction = 0.3
 print(f"Used a fraction of {memory_fraction} GPU's memory")
-
+print(f"Weighted BCE:\t{weightedBCE}")
 
 training_dataset_portion = 0.3
 validation_dataset_portion = 0.03
@@ -119,9 +119,17 @@ print(f'Validation dataset dimension: {len(val_dataset)}')
 
 print(f"{tot_batches} batches of {batch_size} images")
 
+if weightedBCE:
+    # First attempt. I need to change for the frequency of buildings and background pixels
+    print('Computing the weights...')
+    weight = torch.tensor([1/(1-0.146), 1/0.146])
+    print(weight)
+    criterion = nn.BCEWithLogitsLoss(weight=weight)
+else:
+    criterion = nn.BCEWithLogitsLoss()
+
 # model initialization, loss and optimizer
 model = UNet1(n_channels=3, n_classes=1).to(device)
-criterion = nn.BCEWithLogitsLoss()
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 
