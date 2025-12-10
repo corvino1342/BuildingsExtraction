@@ -70,8 +70,9 @@ print(f"Weighted BCE:\t{weightedBCE}")
 
 training_dataset_portion = 0.3
 validation_dataset_portion = 0.03
-num_epochs = 50
+num_epochs = 30
 learning_rate = 1e-4
+
 
 best_val_loss = float("inf")
 patience = 5
@@ -122,9 +123,9 @@ print(f"{tot_batches} batches of {batch_size} images")
 if weightedBCE:
     # First attempt. I need to change for the frequency of buildings and background pixels
     print('Computing the weights...')
-    weight = torch.tensor([1/(1-0.146), 1/0.146])
+    weight = torch.tensor([1/0.146], device=device)
     print(weight)
-    criterion = nn.BCEWithLogitsLoss(weight=weight)
+    criterion = nn.BCEWithLogitsLoss(pos_weight=weight)
 else:
     criterion = nn.BCEWithLogitsLoss()
 
@@ -133,7 +134,7 @@ model = UNet1(n_channels=3, n_classes=1).to(device)
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 
-model_name = f'unet_{model_dataset}_lr{str(learning_rate).replace(".", "p")}_n{len(train_dataset)}_dim{tile_dimension}x{tile_dimension}_bs{batch_size}'
+model_name = f'unet_{model_dataset}_WBCE_lr{str(learning_rate).replace(".", "p")}_n{len(train_dataset)}_dim{tile_dimension}x{tile_dimension}_bs{batch_size}'
 os.makedirs(f'/home/antoniocorvino/Projects/BuildingsExtraction/runs/{model_name}', exist_ok=True)
 
 # Saving metrics
@@ -256,7 +257,7 @@ for epoch in range(num_epochs):
                              epoch_val_loss, val_iou, val_prec, val_recall,
                              round(elapsed_time, 2)])
     # Checkpoint
-    if (epoch+1) % 5 == 0:
+    if (epoch+1) % 10 == 0:
         torch.save(model.state_dict(), f"/home/antoniocorvino/Projects/BuildingsExtraction/runs/{model_name}/checkpoint_{epoch+1}.pth")
 
     if epoch_val_loss < best_val_loss:
