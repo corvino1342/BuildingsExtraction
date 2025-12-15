@@ -1,4 +1,5 @@
 import os
+from tqdm import tqdm
 
 import torch
 import torch.nn as nn
@@ -56,8 +57,8 @@ starting_time = time.time()
 
 
 model_dataset = 'AID'
-tile_dimension = 128
-batch_size = 128
+tile_dimension = 256
+batch_size = 32
 weightedBCE = True
 earlystop = False
 
@@ -69,8 +70,8 @@ memory_fraction = 0.3
 print(f"Used a fraction of {memory_fraction} GPU's memory")
 print(f"Weighted BCE:\t{weightedBCE}")
 
-training_dataset_portion = 1
-validation_dataset_portion = 0.03
+training_dataset_portion = 0.5
+validation_dataset_portion = 0.3
 num_epochs = 30
 learning_rate = 1e-4
 
@@ -85,7 +86,6 @@ transform = transforms.Compose([
 ])
 
 dataset_path = '/mnt/nas151/sar/Footprint/datasets/'
-dataset_path = '/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/'
 
 dataset_kind = 'AerialImageDataset'
 # Dataset and DataLoader
@@ -100,8 +100,6 @@ indices = np.random.permutation(num_samples)[:subset_size]
 train_dataset = Subset(train_dataset_full, indices)
 
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-
-
 
 val_dataset_full = MyDataset(image_dir=dataset_path + dataset_kind + f'/tiles_{tile_dimension}/val/images',
                           mask_dir=dataset_path + dataset_kind + f'/tiles_{tile_dimension}/val/gt',
@@ -126,16 +124,17 @@ print(f"{tot_batches} batches of {batch_size} images")
 
 if weightedBCE:
     # First attempt. I need to change for the frequency of buildings and background pixels
+    start = time.time()
     print('Computing the weights...')
     tile_length = len(train_loader.dataset[0][1][0]) * len(train_loader.dataset[0][1][0][0])
     pos_freq = 0
     neg_freq = 0
-    for tile in train_loader.dataset:
+    for tile in tqdm(train_loader.dataset):
         pos_freq += torch.sum(tile[1][0])
 
     neg_freq = tile_length * len(train_loader.dataset) - pos_freq
     weight = torch.tensor(neg_freq / pos_freq)
-    print(f'Positive weight:\t{weight}')
+    print(f'Positive weight:\t{weight:.2f}')
     criterion = nn.BCEWithLogitsLoss(pos_weight=weight)
 else:
     criterion = nn.BCEWithLogitsLoss()
