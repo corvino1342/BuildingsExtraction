@@ -1,9 +1,5 @@
 import matplotlib.pyplot as plt
 import pandas as pd
-import hashlib
-import colorsys
-
-from numpy.ma.core import filled
 
 metrics = ['epoch_loss', 'iou', 'precision', 'recall', 'f1']
 
@@ -142,8 +138,8 @@ def ValuesReached(model_names):
         print(f"F1   --- {df['train_f1'].iloc[-1]:.3f} --- \t --- {df['val_f1'].iloc[-1]:.3f} ---\n")
 
 
-model_names = ['unet_AID_BCE_lr0p0001_n28000_dim256x256_bs32',
-               'unet_AID_WBCE_lr0p0001_n44800_dim256x256_bs32',
+model_names = ['unet_IAD_BCE_lr0p0001_n28000_dim256x256_bs32',
+               'unet_IAD_WBCE_lr0p0001_n44800_dim256x256_bs32',
                'unet_MBD_BCE_lr0p0001_n3945_dim256x256_bs32',
                'unet_MBD_WBCE_lr0p0001_n3945_dim256x256_bs32']
 
