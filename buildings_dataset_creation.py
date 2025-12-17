@@ -1,3 +1,4 @@
+# THIS CODE MUST RUN ON ALIENWARE OR THE LOCAL PC (WITH SOME UN-COMMENT) BECAUSE OF THE ACCESS TO THE DATASET
 from PIL import Image
 import os
 import shutil
@@ -84,4 +85,4 @@ aerial_dataset_name = 'InriaAerialDataset'
 tile_measure = 256
 
 clear_tiles_directory(massachusetts_dataset_name, nas_path, tile_measure)
-tiles_creation(massachusetts_dataset_name, nas_path, tile_measure, maps_to_use=100)
+tiles_creation(massachusetts_dataset_name, nas_path, tile_measure, maps_to_use=150)
