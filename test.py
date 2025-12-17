@@ -1,4 +1,5 @@
 import torch
+from matplotlib.pyplot import title
 from torchvision import transforms
 from PIL import Image
 import matplotlib.pyplot as plt
@@ -7,10 +8,10 @@ import time
 import numpy as np
 from matplotlib import colors
 from matplotlib import patches
-
+import os
 
 # === Utility: Visualize predicted building mask overlay with confusion colors ===
-def visualize_building_overlay(image, pred_mask, true_mask, alpha=0.4):
+def Overlay(model_name, image, image_name, pred_mask, true_mask, alpha=0.4):
     """
     Overlay predicted building mask and ground truth on the original image.
     Highlights:
@@ -44,7 +45,7 @@ def visualize_building_overlay(image, pred_mask, true_mask, alpha=0.4):
     fig, ax = plt.subplots(1, 1, figsize=(8, 8))
     ax.imshow(img_np)
     ax.imshow(overlay)
-    ax.set_title("Building Prediction Overlay", fontsize=16)
+    ax.set_title(f"{model_name}", fontsize=16)
     ax.axis("off")
 
     legend_elements = [
@@ -53,10 +54,10 @@ def visualize_building_overlay(image, pred_mask, true_mask, alpha=0.4):
         patches.Patch(facecolor='red', label='False Negative'),
     ]
     ax.legend(handles=legend_elements, loc='upper left', fontsize=12)
-    plt.show()
+    plt.savefig(f'/Users/corvino/PycharmProjects/BuildingsExtraction/predictions/test/{model_name}/{image_name}.tif')
+    #plt.show()
 
-
-def three_plot(image, pred_mask, true_mask):
+def ThreePlot(model_name, image, pred_mask, true_mask):
     if true_mask is None:
         ncols = 2
     else:
@@ -106,61 +107,60 @@ def three_plot(image, pred_mask, true_mask):
 
 # === Initial Configuration ===
 
-start = time.time()
 model_loaded = UNet1
 
-model = 'unet_AID_WBCE_lr0p0001_n28000_dim256x256_bs32'
-
-model_path = f"/Users/corvino/PycharmProjects/BuildingsExtraction/runs/{model}/checkpoint_30.pth"
-
-C_image_path = '/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/fotoxtest/foto3.png'
-MBD_image_path = '/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/MassachusettsBuildingsDataset/tiles/test/images/22828930_15_2.tif'
-AID_image_path = '/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/AerialImageDataset/tiles_512/test/images/chicago13_1.tif'
-H_image_path = '/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/handmade/test/images/tile-0_1.png'
-
-print(f'Time for Initial Configuration: {(time.time()-start):.3f} s')
-
-# === Load the model ===
-start = time.time()
-
-model = model_loaded(n_channels=3, n_classes=1)
-model.load_state_dict(torch.load(model_path, map_location=torch.device("mps")))
-model.eval()
-print(f'Time for Loading the Model: {(time.time()-start):.3f} s')
-
-
-file_name = 'austin34_10'
-
-img = Image.open(
-    f'/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/AerialImageDataset/tiles_512/test/images/{file_name}.tif').convert("RGB")
-mask = Image.open(
-    f'/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/AerialImageDataset/tiles_512/test/gt/{file_name}.tif').convert("L")
-print(f'\n{file_name}\n')
+model_names = ['unet_AID_BCE_lr0p0001_n28000_dim256x256_bs32',
+               'unet_AID_WBCE_lr0p0001_n44800_dim256x256_bs32',
+               'unet_MBD_BCE_lr0p0001_n3945_dim256x256_bs32',
+               'unet_MBD_WBCE_lr0p0001_n3945_dim256x256_bs32']
 
 # === Prepare the image ===
 start = time.time()
 
-transform = transforms.Compose([transforms.ToTensor(),])
+image_name = 'austin34_10'
+
+img = Image.open(f'/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/AerialImageDataset/tiles_512/test/images/{image_name}.tif').convert("RGB")
+mask = Image.open(f'/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/AerialImageDataset/tiles_512/test/gt/{image_name}.tif').convert("L")
+
+print(f'\n{image_name}\n')
+
+transform = transforms.Compose([transforms.ToTensor(), ])
 
 input_tensor = transform(img).unsqueeze(0)
-print(f'Time for Image Preparation: {(time.time()-start):.3f} s')
+print(f'Time for Image Preparation: {(time.time() - start):.3f} s')
 
-# === Inference ===
-start = time.time()
+for model_name in model_names:
 
-with torch.no_grad():
-    output = model(input_tensor)
-    prediction = torch.sigmoid(output)
-    binary_mask = (prediction > 0.5).float()
-print(f'Time for Inference: {(time.time()-start):.3f} s')
+    model_path = f"/Users/corvino/PycharmProjects/BuildingsExtraction/runs/{model_name}/checkpoint_50.pth"
 
-# === Visualization ===
+    # === Load the model ===
+    start = time.time()
 
-# Convert masks to numpy
-true_mask = np.array(mask) > 0
-binary_mask_np = binary_mask.squeeze().numpy()
+    model = model_loaded(n_channels=3, n_classes=1)
+    model.load_state_dict(torch.load(model_path, map_location=torch.device("mps")))
+    model.eval()
+    print(f'Time for Loading the Model: {(time.time()-start):.3f} s')
 
-#visualize_building_overlay(img, binary_mask_np, true_mask)
-three_plot(img, binary_mask_np, true_mask=None)
+
+
+    # === Inference ===
+    start = time.time()
+
+    with torch.no_grad():
+        output = model(input_tensor)
+        prediction = torch.sigmoid(output)
+        binary_mask = (prediction > 0.5).float()
+    print(f'Time for Inference: {(time.time()-start):.3f} s')
+
+    # === Visualization ===
+
+    # Convert masks to numpy
+    true_mask = np.array(mask) > 0
+    binary_mask_np = binary_mask.squeeze().numpy()
+
+    os.makedirs(f'/Users/corvino/PycharmProjects/BuildingsExtraction/predictions/test/{model_name}', exist_ok=True)
+
+    Overlay(model_name, img, image_name, binary_mask_np, true_mask)
+    #ThreePlot(model, img, binary_mask_np, true_mask=None)
 
 
