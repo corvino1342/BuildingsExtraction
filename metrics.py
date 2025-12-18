@@ -1,34 +1,20 @@
 import matplotlib.pyplot as plt
 import pandas as pd
-import hashlib
-import colorsys
 
 metrics = ['epoch_loss', 'iou', 'precision', 'recall', 'f1']
 
-def model_color_from_name(model_name, saturation=0.65, value=0.85):
-    """
-    Generate a deterministic RGB color from a model name.
-    The model name is mapped to a hue value, ensuring that even
-    small changes in the name produce clearly different colors.
-    """
-    h = hashlib.md5(model_name.encode()).hexdigest()
-    # Map hash to hue in [0, 1)
-    hue = int(h[:6], 16) / 0xFFFFFF
-    r, g, b = colorsys.hsv_to_rgb(hue, saturation, value)
-    return (r, g, b)
-
-def short_model_name(model_name):
+def ShortModelName(model_name):
     """
     Create a compact, human-readable model identifier for plots.
     Example:
     unet_AID_WBCE_lr0p0001_n28000_dim256x256_bs32
-    -> UNet | AID | WBCE | 256 | bs32
+    -> UNet | IAD | WBCE | 256 | bs32
     """
     parts = model_name.split('_')
 
     arch = parts[0].upper() if parts else "MODEL"
 
-    dt = "AID" if "AID" in parts else "MBD" if "MBD" in parts else "DATASET"
+    dt = "IAD" if "IAD" in parts else "MBD" if "MBD" in parts else "DATASET"
 
     loss = "WBCE" if "WBCE" in parts else "BCE" if "BCE" in parts else "LOSS"
 
@@ -39,34 +25,45 @@ def short_model_name(model_name):
 
     return f"{arch} | {dt} | {loss} | {dim} | {bs}"
 
+def F1Score(model_names):
+    for model_name in model_names:
+        df = pd.read_csv(f'/Users/corvino/PycharmProjects/BuildingsExtraction/runs/{model_name}/metrics.csv')
 
-def Metrics(model_names):
+        df[f'train_f1'] = 2 * (df['train_precision'] * df['train_recall']) / (df['train_precision'] + df['train_recall'])
+        df[f'val_f1'] = 2 * (df['val_precision'] * df['val_recall']) / (df['val_precision'] + df['val_recall'])
+
+        df.to_csv(f'/Users/corvino/PycharmProjects/BuildingsExtraction/runs/{model_name}/metrics.csv')
+
+def Plots(model_names):
+
+    colors = [
+        (0.12, 0.47, 0.71),  # blue
+        (1.00, 0.50, 0.05),  # orange
+        (0.17, 0.63, 0.17),  # green
+        (0.84, 0.15, 0.16),  # red
+        (0.58, 0.40, 0.74),  # purple
+        (0.55, 0.34, 0.29),  # brown
+        (0.00, 0.62, 0.60),  # cyan
+    ]
+
     for i, metric in enumerate(metrics, 1):
         plt.style.use('seaborn-v0_8-darkgrid')
-        plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(14, 7))
         for model_name in model_names:
-            base_color = model_color_from_name(model_name)
-            train_color = base_color
-            val_color = (
-                min(base_color[0] + 0.15, 1.0),
-                min(base_color[1] + 0.15, 1.0),
-                min(base_color[2] + 0.15, 1.0),
-            )
+
             df = pd.read_csv(f'/Users/corvino/PycharmProjects/BuildingsExtraction/runs/{model_name}/metrics.csv')
             # Metric Plots
             epochs = df['epoch']
 
-            df[f'train_f1'] = 2 * (df['train_precision'] * df['train_recall']) / (df['train_precision'] + df['train_recall'])
-            df[f'val_f1'] = 2 * (df['val_precision'] * df['val_recall']) / (df['val_precision'] + df['val_recall'])
+            short_name = ShortModelName(model_name)
 
-            short_name = short_model_name(model_name)
-
+            idx = model_names.index(model_name)
             # --- Plot training & validation metrics ---
             plt.plot(
                 epochs,
                 df[f'train_{metric}'],
-                color=train_color,
-                linewidth=2.5,
+                color=colors[idx],
+                linewidth=1.5,
                 alpha=0.9,
                 linestyle='-',
                 label=f'Train | {short_name}'
@@ -74,10 +71,10 @@ def Metrics(model_names):
             plt.plot(
                 epochs,
                 df[f'val_{metric}'],
-                color=val_color,
-                linewidth=2.5,
+                color=colors[idx],
+                linewidth=2,
                 alpha=0.9,
-                linestyle='--',
+                linestyle=':',
                 label=f'Val   | {short_name}'
             )
 
@@ -87,15 +84,15 @@ def Metrics(model_names):
             last_val = df[f'val_{metric}'].iloc[-1]
 
             # Mark the last points
-            plt.scatter(last_epoch, last_train, color=train_color, s=80, zorder=5)
-            plt.scatter(last_epoch, last_val, color=val_color, s=80, zorder=5)
+            plt.scatter(last_epoch, last_train, color=colors[idx], s=80, zorder=5)
+            plt.scatter(last_epoch, last_val, color=colors[idx], s=80, zorder=5)
 
             # Annotate the last values
             plt.text(
                 last_epoch + 1,
                 last_train,
                 f'{last_train:.2f}',
-                color=train_color,
+                color=colors[idx],
                 fontsize=11,
                 weight='bold'
             )
@@ -103,7 +100,7 @@ def Metrics(model_names):
                 last_epoch + 1,
                 last_val,
                 f'{last_val:.2f}',
-                color=val_color,
+                color=colors[idx],
                 fontsize=11,
                 weight='bold'
             )
@@ -114,25 +111,38 @@ def Metrics(model_names):
             plt.ylabel(f'{metric}', fontsize=13)
 
             # --- Legend and style tweaks ---
-            plt.legend(fontsize=12, frameon=True, facecolor='white', shadow=True, loc='best')
+            plt.legend(fontsize=9, frameon=True, facecolor='white', shadow=True, bbox_to_anchor=(1, 1))
             plt.grid(True, which='major', linestyle='--', linewidth=0.7, alpha=0.7)
             plt.tight_layout()
 
-            # --- Optional: Save or show ---
-            #plt.savefig(f'predictions/{metric}_{model_name}.png', dpi=300, bbox_inches='tight')
-        plt.show()
+        # --- Optional: Save or show ---
+        plt.savefig(f'/Users/corvino/PycharmProjects/BuildingsExtraction/predictions/{metric}.tif', dpi=300, bbox_inches='tight')
+        #plt.show()
 
-        plt.tight_layout()
+def ValuesReached(model_names):
+    for model_name in model_names:
+        print(f'\n--------- {ShortModelName(model_name)} ---------\n')
+        df = pd.read_csv(f'/Users/corvino/PycharmProjects/BuildingsExtraction/runs/{model_name}/metrics.csv')
+
         total_seconds = df['time'].sum()
         hours, remainder = divmod(total_seconds, 3600)
         minutes = remainder // 60
-        print(f"Time spent: {int(hours)}:{int(minutes):02d} hours")
+        print(f"Time spent: {int(hours)}:{int(minutes):02d} hours for {df['epoch'].iloc[-1]} epochs\n")
 
-        for metric in df.keys():
-            print(f'{metric}: {df[metric].iloc[-1]:.3f}')
+        print('VALUES REACHED')
+        print(f"\t --- TRAIN --- \t --- VALID ---")
+        print(f"Loss --- {df['train_epoch_loss'].iloc[-1]:.3f} --- \t --- {df['val_epoch_loss'].iloc[-1]:.3f} ---")
+        print(f"IoU  --- {df['train_iou'].iloc[-1]:.3f} --- \t --- {df['val_iou'].iloc[-1]:.3f} ---")
+        print(f"Prec --- {df['train_precision'].iloc[-1]:.3f} --- \t --- {df['val_precision'].iloc[-1]:.3f} ---")
+        print(f"Rec  --- {df['train_recall'].iloc[-1]:.3f} --- \t --- {df['val_recall'].iloc[-1]:.3f} ---")
+        print(f"F1   --- {df['train_f1'].iloc[-1]:.3f} --- \t --- {df['val_f1'].iloc[-1]:.3f} ---\n")
 
 
-model_name = ['unet_AID_BCE_lr0p0001_n28000_dim256x256_bs32',
-              'unet_AID_WBCE_lr0p0001_n28000_dim256x256_bs32']
+model_names = ['unet_IAD_BCE_lr0p0001_n44800_dim256x256_bs32',
+               'unet_IAD_WBCE_lr0p0001_n44800_dim256x256_bs32',
+               'unet_MBD_BCE_lr0p0001_n3945_dim256x256_bs32',
+               'unet_MBD_WBCE_lr0p0001_n3945_dim256x256_bs32']
 
-Metrics(model_name)
+F1Score(model_names)
+Plots(model_names)
+ValuesReached(model_names)
