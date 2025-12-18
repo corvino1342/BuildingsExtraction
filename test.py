@@ -55,7 +55,7 @@ def Overlay(model_name, image, image_name, pred_mask, true_mask, alpha=0.4):
     ]
     ax.legend(handles=legend_elements, loc='upper left', fontsize=12)
     plt.savefig(f'/Users/corvino/PycharmProjects/BuildingsExtraction/predictions/test/{model_name}/{image_name}.tif')
-    #plt.show()
+    plt.show()
 
 def ThreePlot(model_name, image, pred_mask, true_mask):
     if true_mask is None:
@@ -109,18 +109,18 @@ def ThreePlot(model_name, image, pred_mask, true_mask):
 
 model_loaded = UNet1
 
-model_names = ['unet_AID_BCE_lr0p0001_n28000_dim256x256_bs32',
-               'unet_AID_WBCE_lr0p0001_n44800_dim256x256_bs32',
+model_names = ['unet_IAD_BCE_lr0p0001_n44800_dim256x256_bs32',
+               'unet_IAD_WBCE_lr0p0001_n44800_dim256x256_bs32',
                'unet_MBD_BCE_lr0p0001_n3945_dim256x256_bs32',
                'unet_MBD_WBCE_lr0p0001_n3945_dim256x256_bs32']
 
 # === Prepare the image ===
 start = time.time()
 
-image_name = 'austin34_10'
+image_name = 'austin34_7'
 
-img = Image.open(f'/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/AerialImageDataset/tiles_512/test/images/{image_name}.tif').convert("RGB")
-mask = Image.open(f'/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/AerialImageDataset/tiles_512/test/gt/{image_name}.tif').convert("L")
+img = Image.open(f'/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/InriaAerialDataset/tiles_512/test/images/{image_name}.tif').convert("RGB")
+mask = Image.open(f'/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/InriaAerialDataset/tiles_512/test/gt/{image_name}.tif').convert("L")
 
 print(f'\n{image_name}\n')
 

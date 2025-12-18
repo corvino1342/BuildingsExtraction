@@ -8,13 +8,13 @@ def ShortModelName(model_name):
     Create a compact, human-readable model identifier for plots.
     Example:
     unet_AID_WBCE_lr0p0001_n28000_dim256x256_bs32
-    -> UNet | AID | WBCE | 256 | bs32
+    -> UNet | IAD | WBCE | 256 | bs32
     """
     parts = model_name.split('_')
 
     arch = parts[0].upper() if parts else "MODEL"
 
-    dt = "AID" if "AID" in parts else "MBD" if "MBD" in parts else "DATASET"
+    dt = "IAD" if "IAD" in parts else "MBD" if "MBD" in parts else "DATASET"
 
     loss = "WBCE" if "WBCE" in parts else "BCE" if "BCE" in parts else "LOSS"
 
@@ -138,7 +138,7 @@ def ValuesReached(model_names):
         print(f"F1   --- {df['train_f1'].iloc[-1]:.3f} --- \t --- {df['val_f1'].iloc[-1]:.3f} ---\n")
 
 
-model_names = ['unet_IAD_BCE_lr0p0001_n28000_dim256x256_bs32',
+model_names = ['unet_IAD_BCE_lr0p0001_n44800_dim256x256_bs32',
                'unet_IAD_WBCE_lr0p0001_n44800_dim256x256_bs32',
                'unet_MBD_BCE_lr0p0001_n3945_dim256x256_bs32',
                'unet_MBD_WBCE_lr0p0001_n3945_dim256x256_bs32']
