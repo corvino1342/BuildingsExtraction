@@ -15,14 +15,14 @@ def clear_tiles_directory(dataset_name, dataset_path, tile_measure):
 def tiles_creation(dataset_name, dataset_path, tile_measure, maps_to_use):
 
     os.makedirs(f'{dataset_path}/{dataset_name}/tiles', exist_ok=True)
-    
+
     for dataset_type in ['train', 'val', 'test']:
 
         print(f'Dataset type ------- {dataset_type}')
 
         gt = True
-        if not os.path.exists(f'/home/antoniocorvino/Projects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/gt'):
-        #if not os.path.exists( f'/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/gt'):
+        #if not os.path.exists(f'/home/antoniocorvino/Projects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/gt'):
+        if not os.path.exists( f'/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/gt'):
 
             print(f'---------{dataset_type} dataset has not Ground Truth---------')
             gt = False
@@ -31,7 +31,7 @@ def tiles_creation(dataset_name, dataset_path, tile_measure, maps_to_use):
         os.makedirs(f'{dataset_path}/{dataset_name}/tiles_{tile_measure}/{dataset_type}/images', exist_ok=True)
         os.makedirs(f'{dataset_path}/{dataset_name}/tiles_{tile_measure}/{dataset_type}/gt', exist_ok=True)
 
-        full_maps = sorted(os.path.splitext(f)[0] for f in os.listdir(f'/home/antoniocorvino/Projects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/images') if f.lower().endswith(('.tif', '.tiff', '.png', '.jpg')))
+        full_maps = sorted(os.path.splitext(f)[0] for f in os.listdir(f'datasets/{dataset_name}/{dataset_type}/images') if f.lower().endswith(('.tif', '.tiff', '.png', '.jpg')))
 
         print(f'Maps used in {dataset_type}: {maps_to_use}/{len(full_maps)}..................')
 
@@ -39,11 +39,11 @@ def tiles_creation(dataset_name, dataset_path, tile_measure, maps_to_use):
 
 
         for name in full_maps:
-            #image = Image.open(f'/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/images/{name}.tif')
-            image = Image.open(f'/home/antoniocorvino/Projects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/images/{name}.tif')
+            image = Image.open(f'/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/images/{name}.tif')
+            #image = Image.open(f'/home/antoniocorvino/Projects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/images/{name}.tif')
             if gt:
-                #mask = Image.open(f'/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/gt/{name}.tif')
-                mask = Image.open(f'/home/antoniocorvino/Projects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/gt/{name}.tif')
+                mask = Image.open(f'/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/gt/{name}.tif')
+                #mask = Image.open(f'/home/antoniocorvino/Projects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/gt/{name}.tif')
 
             count = 0
 
@@ -80,7 +80,7 @@ nas_path = '/mnt/nas151/sar/Footprint/datasets'
 local_path = '/Users/corvino/PycharmProjects/BuildingsExtraction/datasets'
 
 massachusetts_dataset_name = 'MassachusettsBuildingsDataset'
-aerial_dataset_name = 'AerialImageDataset'
+aerial_dataset_name = 'InriaAerialDataset'
 
 tile_measure = 256
 
