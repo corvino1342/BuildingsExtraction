@@ -96,7 +96,7 @@ class OutConv(nn.Module):
     def forward(self, x):
         return self.conv(x)
 
-# UNet1
+# UNet
 
 # Input-> [Down1]->                                                              [Up1]-> Output
 #                  [Down2]->                                              [Up2]->
@@ -106,9 +106,9 @@ class OutConv(nn.Module):
 
 # The actual UNet to train. The training time is a lot bigger wrt the other
 
-class UNet1(nn.Module):
+class UNet(nn.Module):
     def __init__(self, n_channels, n_classes, bilinear=True):
-        super(UNet1, self).__init__()
+        super(UNet, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
         self.bilinear = bilinear
@@ -138,7 +138,7 @@ class UNet1(nn.Module):
         logits = self.outc(x)
         return logits
 
-# UNet2
+# UNetL
 
 # Input-> [Down1]->                                                              [Up1]-> Output
 #                  [Down2]->                                              [Up2]->
@@ -146,11 +146,11 @@ class UNet1(nn.Module):
 #                                    [Down4]->              [Up4]->
 #                                             [Bottleneck]->
 
-# The actual UNet to train. The training time is a lot bigger wrt the other
+# A lighter version of the previous UNet with half of the channels for each layer
 
-class UNet2(nn.Module):
+class UNetL(nn.Module):
     def __init__(self, n_channels, n_classes, bilinear=True):
-        super(UNet2, self).__init__()
+        super(UNetL, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
         self.bilinear = bilinear
@@ -179,3 +179,4 @@ class UNet2(nn.Module):
         x = self.up4(x, x1)
         logits = self.outc(x)
         return logits
+
