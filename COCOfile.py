@@ -8,14 +8,15 @@ from pycocotools import mask as coco_mask
 from tqdm import tqdm
 
 
-def SemanticMaskGenerator(dataset_kind):
+def SemanticMaskGenerator(common_path, dataset_kind):
 
-    coco_json = f"/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/WHUBuildingDataset/annotation/{dataset_kind}.json"
-    image_dir = f"/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/WHUBuildingDataset/{dataset_kind}/images"
-    mask_dir = f"/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/WHUBuildingDataset/{dataset_kind}/gt"
+    coco_json = f"{common_path}/annotation/{dataset_kind}.json"
+    image_dir = f"{common_path}/{dataset_kind}/images"
+    mask_dir = f"{common_path}/{dataset_kind}/gt"
 
     os.makedirs(mask_dir, exist_ok=True)
-
+    os.makedirs(image_dir, esixt_ok=True)
+    
     # ---- Load COCO ----
     with open(coco_json, "r") as f:
         coco = json.load(f)
@@ -65,9 +66,9 @@ def SemanticMaskGenerator(dataset_kind):
 
     print(f"Images without annotations: {image_NOann}")
 
-def InstanceMaskGenerator(dataset_kind):
+def InstanceMaskGenerator(common_path, dataset_kind):
 
-    common_path = f'/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/WHUBuildingDataset'
+    
 
     coco_json = f"{common_path}/annotation/{dataset_kind}.json"
     image_dir = f"{common_path}/{dataset_kind}/images"
@@ -148,4 +149,13 @@ def InstanceMaskGenerator(dataset_kind):
 
     print(f"Total instances saved: {instance_counter}")
 
-InstanceMaskGenerator(dataset_kind='val')
+#local path on macbook
+common_path = '/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/WHUBuildingDataset'
+
+#path of the nas
+common_path = '/mnt/nas151/sar/Footprint/datasets/WHUBuildingDataset'
+
+dataset_kind = 'val'
+
+SemanticMaskGenerator(common_path=common_path, dataset_kind=dataset_kind)
+#InstanceMaskGenerator(common_path=common_path, dataset_kind=dataset_kind)
