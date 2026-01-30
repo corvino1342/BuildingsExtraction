@@ -15,7 +15,7 @@ def SemanticMaskGenerator(common_path, dataset_kind):
     mask_dir = f"{common_path}/{dataset_kind}/gt"
 
     os.makedirs(mask_dir, exist_ok=True)
-    os.makedirs(image_dir, esixt_ok=True)
+    os.makedirs(image_dir, exist_ok=True)
     
     # ---- Load COCO ----
     with open(coco_json, "r") as f:
