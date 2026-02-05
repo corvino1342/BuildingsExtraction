@@ -2,7 +2,7 @@
 from PIL import Image
 import os
 import shutil
-
+from tqdm import tqdm
 
 def clear_tiles_directory(dataset_name, dataset_path, tile_measure):
     if os.path.exists(f'{dataset_path}/{dataset_name}/tiles_{tile_measure}'):
@@ -34,12 +34,14 @@ def tiles_creation(dataset_name, dataset_path, tile_measure, maps_to_use):
 
         full_maps = sorted(os.path.splitext(f)[0] for f in os.listdir(f'{dataset_path}/{dataset_name}/tiles/{dataset_type}/images') if f.lower().endswith(('.tif', '.tiff', '.png', '.jpg', '.TIF')))
 
+        if (maps_to_use-len(full_maps)) >= 0:
+            maps_to_use = len(full_maps)
         print(f'Maps used in {dataset_type}: {maps_to_use}/{len(full_maps)}..................')
 
         full_maps = full_maps[:maps_to_use]
 
 
-        for name in full_maps:
+        for name in tqdm(full_maps, desc=f'Processing {dataset_type} tiles...'):
             #image = Image.open(f'/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/images/{name}.tif')
             #image = Image.open(f'/home/antoniocorvino/Projects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/images/{name}.tif')
             image = Image.open(f'/mnt/nas151/sar/Footprint/datasets/{dataset_name}/tiles/{dataset_type}/images/{name}.TIF')
@@ -50,7 +52,7 @@ def tiles_creation(dataset_name, dataset_path, tile_measure, maps_to_use):
 
             count = 0
 
-            height, width = image.size
+            width, height = image.size
 
             for i in range(0, height, tile_measure):
                 for j in range(0, width, tile_measure):
@@ -71,7 +73,6 @@ def tiles_creation(dataset_name, dataset_path, tile_measure, maps_to_use):
                     image_tile.save(f'{dataset_path}/{dataset_name}/tiles_{tile_measure}/{dataset_type}/images/{name}_{count}.tif')
                     if gt:
                         mask_tile.save(f'{dataset_path}/{dataset_name}/tiles_{tile_measure}/{dataset_type}/gt/{name}_{count}.tif')
-            print(f'{name} DONE!\nTiles created:\t{count}\n')
 
 
 # DEVO PROVARE A CALCOLARE LA MEDIA DEL VALORE DELLE MASCHERE PER CAPIRE SE SONO BILANCIATI I DATI
@@ -89,4 +90,4 @@ whu_dataset_name = 'WHUBuildingDataset'
 tile_measure = 256
 
 clear_tiles_directory(whu_dataset_name, nas_path, tile_measure)
-tiles_creation(whu_dataset_name, nas_path, tile_measure, maps_to_use=1500)
+tiles_creation(whu_dataset_name, nas_path, tile_measure, maps_to_use=3000)
