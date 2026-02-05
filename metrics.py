@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import pandas as pd
+from click import style
 
 metrics = ['epoch_loss', 'iou', 'precision', 'recall', 'f1']
 
@@ -7,8 +8,8 @@ def ShortModelName(model_name):
     """
     Create a compact, human-readable model identifier for plots.
     Example:
-    unet_AID_WBCE_lr0p0001_n28000_dim256x256_bs32
-    -> UNet | IAD | WBCE | 256 | bs32
+    unet_IAD_WBCE_lr0p0001_n28000_dim256x256_bs32
+    -> UNet | IAD | WBCE | 1e-04 | 256 | bs32
     """
     parts = model_name.split('_')
 
@@ -16,14 +17,29 @@ def ShortModelName(model_name):
 
     dt = "IAD" if "IAD" in parts else "MBD" if "MBD" in parts else "DATASET"
 
-    loss = "WBCE" if "WBCE" in parts else "BCE" if "BCE" in parts else "LOSS"
+    loss = "WBCE" if "WBCE" in parts else "BCE" if "BCE" in parts else "WBCE+Dice" if "WBCEplusDL" in parts else "BCE+Dice" if "BCEplusDL" in parts else "LOSS"
+
+    lr_part = next((p for p in parts if p.startswith("lr")), None)
+
+    if lr_part is None:
+        lr = "lr_var"
+    else:
+        lr_raw = lr_part[2:]  # strip 'lr'
+
+        if 'e' in lr_raw:
+            # already in scientific notation
+            lr = lr_raw
+        elif 'p' in lr_raw:
+            # convert 0p0001 -> 1e-04
+            value = float(lr_raw.replace('p', '.'))
+            lr = f"{value:.0e}"
 
     dim = next((p.replace("dim", "") for p in parts if p.startswith("dim")), "dim?")
     dim = dim.split('x')[0]  # keep only one spatial dimension
 
     bs = next((p for p in parts if p.startswith("bs")), "bs?")
 
-    return f"{arch} | {dt} | {loss} | {dim} | {bs}"
+    return f"{arch} | {dt} | {loss} | {lr} | {dim} | {bs}"
 
 def F1Score(model_names):
     for model_name in model_names:
@@ -63,7 +79,7 @@ def Plots(model_names):
                 epochs,
                 df[f'train_{metric}'],
                 color=colors[idx],
-                linewidth=1.5,
+                linewidth=3,
                 alpha=0.9,
                 linestyle='-',
                 label=f'Train | {short_name}'
@@ -72,38 +88,14 @@ def Plots(model_names):
                 epochs,
                 df[f'val_{metric}'],
                 color=colors[idx],
-                linewidth=2,
+                linewidth=3,
                 alpha=0.9,
                 linestyle=':',
                 label=f'Val   | {short_name}'
             )
 
-            # --- Mark and annotate the last values ---
-            last_epoch = epochs.iloc[-1]
-            last_train = df[f'train_{metric}'].iloc[-1]
-            last_val = df[f'val_{metric}'].iloc[-1]
 
-            # Mark the last points
-            plt.scatter(last_epoch, last_train, color=colors[idx], s=80, zorder=5)
-            plt.scatter(last_epoch, last_val, color=colors[idx], s=80, zorder=5)
 
-            # Annotate the last values
-            plt.text(
-                last_epoch + 1,
-                last_train,
-                f'{last_train:.2f}',
-                color=colors[idx],
-                fontsize=11,
-                weight='bold'
-            )
-            plt.text(
-                last_epoch + 1,
-                last_val,
-                f'{last_val:.2f}',
-                color=colors[idx],
-                fontsize=11,
-                weight='bold'
-            )
 
             # --- Titles and labels ---
             plt.title(f'Training and Validation {metric}', fontsize=16, weight='bold', pad=15)
@@ -115,8 +107,7 @@ def Plots(model_names):
             plt.grid(True, which='major', linestyle='--', linewidth=0.7, alpha=0.7)
             plt.tight_layout()
 
-        # --- Optional: Save or show ---
-        plt.savefig(f'/Users/corvino/PycharmProjects/BuildingsExtraction/predictions/{metric}.tif', dpi=300, bbox_inches='tight')
+        plt.savefig(f'/Users/corvino/PycharmProjects/BuildingsExtraction/predictions/{metric}.png', dpi=300, bbox_inches='tight')
         #plt.show()
 
 def ValuesReached(model_names):
@@ -138,10 +129,10 @@ def ValuesReached(model_names):
         print(f"F1   --- {df['train_f1'].iloc[-1]:.3f} --- \t --- {df['val_f1'].iloc[-1]:.3f} ---\n")
 
 
-model_names = ['unet_IAD_BCE_lr0p0001_n44800_dim256x256_bs32',
-               'unet_IAD_WBCE_lr0p0001_n44800_dim256x256_bs32',
-               'unet_MBD_BCE_lr0p0001_n3945_dim256x256_bs32',
-               'unet_MBD_WBCE_lr0p0001_n3945_dim256x256_bs32']
+model_names = [
+               'unetLL_IAD_BCEplusDL_n56000_dim256x256_bs32',
+               'unetLL_IAD_WBCEplusDL_n56000_dim256x256_bs32'
+               ]
 
 F1Score(model_names)
 Plots(model_names)
