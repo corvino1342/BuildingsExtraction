@@ -14,7 +14,7 @@ from dataset import MyDataset
 from unet import UNet, UNetL, UNetLL
 
 
-#python training.py --dataset_path /mnt/nas151/Footprint/datasets --dataset_name WHUBuildingSataset --mode tiles --tile_size 256 --batch_size 4 --epochs 30 --lr 0.001 --arch unetLL --loss wbce+dice --output_dir /home/antoniocorvino/Projects/BuildingsExtraction/runs
+#python training.py --dataset_path /mnt/nas151/sar/Footprint/datasets --dataset_name WHUBuildingDataset --mode tiles --tile_size 256 --batch_size 4 --epochs 30 --lr 0.001 --arch unetLL --loss wbce+dice --output_dir /home/antoniocorvino/Projects/BuildingsExtraction/runs
 def iou_score(preds, targets, threshold=0.5, eps=1e-6):
     preds = torch.sigmoid(preds)
     preds = (preds > threshold).float()
@@ -211,7 +211,7 @@ def main():
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
-    run_name = f"{args.arch}_{args.mode}_{args.loss}_bs{args.batch_size}"
+    run_name = f"{args.arch}_{args.mode}_{args.loss}_dim{args.tile_size}_bs{args.batch_size}"
     out_dir = os.path.join(args.output_dir, run_name)
     os.makedirs(out_dir, exist_ok=True)
 
