@@ -15,9 +15,9 @@ def ShortModelName(model_name):
 
     arch = parts[0].upper() if parts else "MODEL"
 
-    dt = "IAD" if "IAD" in parts else "MBD" if "MBD" in parts else "DATASET"
+    dt = parts[1]
 
-    loss = "WBCE" if "WBCE" in parts else "BCE" if "BCE" in parts else "WBCE+Dice" if "WBCEplusDL" in parts else "BCE+Dice" if "BCEplusDL" in parts else "LOSS"
+    loss = parts[2]
 
     lr_part = next((p for p in parts if p.startswith("lr")), None)
 
@@ -41,16 +41,16 @@ def ShortModelName(model_name):
 
     return f"{arch} | {dt} | {loss} | {lr} | {dim} | {bs}"
 
-def F1Score(model_names):
+def F1Score(path, model_names):
     for model_name in model_names:
-        df = pd.read_csv(f'/Users/corvino/PycharmProjects/BuildingsExtraction/runs/{model_name}/metrics.csv')
+        df = pd.read_csv(f'{path}/{model_name}/metrics.csv')
 
         df[f'train_f1'] = 2 * (df['train_precision'] * df['train_recall']) / (df['train_precision'] + df['train_recall'])
         df[f'val_f1'] = 2 * (df['val_precision'] * df['val_recall']) / (df['val_precision'] + df['val_recall'])
 
-        df.to_csv(f'/Users/corvino/PycharmProjects/BuildingsExtraction/runs/{model_name}/metrics.csv')
+        df.to_csv(f'{path}/{model_name}/metrics.csv')
 
-def Plots(model_names):
+def Plots(path, model_names):
 
     colors = [
         (0.12, 0.47, 0.71),  # blue
@@ -67,7 +67,7 @@ def Plots(model_names):
         plt.figure(figsize=(14, 7))
         for model_name in model_names:
 
-            df = pd.read_csv(f'/Users/corvino/PycharmProjects/BuildingsExtraction/runs/{model_name}/metrics.csv')
+            df = pd.read_csv(f'{path}/{model_name}/metrics.csv')
             # Metric Plots
             epochs = df['epoch']
 
@@ -107,13 +107,13 @@ def Plots(model_names):
             plt.grid(True, which='major', linestyle='--', linewidth=0.7, alpha=0.7)
             plt.tight_layout()
 
-        plt.savefig(f'/Users/corvino/PycharmProjects/BuildingsExtraction/predictions/{metric}.png', dpi=300, bbox_inches='tight')
+        plt.savefig(f'{path}/comparison/{metric}.png', dpi=300, bbox_inches='tight')
         #plt.show()
 
-def ValuesReached(model_names):
+def ValuesReached(path, model_names):
     for model_name in model_names:
         print(f'\n--------- {ShortModelName(model_name)} ---------\n')
-        df = pd.read_csv(f'/Users/corvino/PycharmProjects/BuildingsExtraction/runs/{model_name}/metrics.csv')
+        df = pd.read_csv(f'{path}/{model_name}/metrics.csv')
 
         total_seconds = df['time'].sum()
         hours, remainder = divmod(total_seconds, 3600)
@@ -131,9 +131,12 @@ def ValuesReached(model_names):
 
 model_names = [
                'unetLL_IAD_BCEplusDL_n56000_dim256x256_bs32',
-               'unetLL_IAD_WBCEplusDL_n56000_dim256x256_bs32'
+               'unetLL_IAD_WBCEplusDL_n56000_dim256x256_bs32',
+                'unetLL_WHUtiles_WBCEplusDL_n24000_dim256x256_bs32'
                ]
 
-F1Score(model_names)
-Plots(model_names)
-ValuesReached(model_names)
+metrics_path = '/home/antoniocorvino/Projects/BuildingsExtraction/runs'
+
+F1Score(path=metrics_path, model_names=model_names)
+Plots(path=metrics_path, model_names=model_names)
+ValuesReached(path=metrics_path, model_names=model_names)
