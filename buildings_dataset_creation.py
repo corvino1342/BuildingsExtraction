@@ -87,7 +87,7 @@ massachusetts_dataset_name = 'MassachusettsBuildingsDataset'
 aerial_dataset_name = 'InriaAerialDataset'
 whu_dataset_name = 'WHUBuildingDataset'
 
-tile_measure = 256
+tile_measure = 128
 
 clear_tiles_directory(whu_dataset_name, nas_path, tile_measure)
 tiles_creation(whu_dataset_name, nas_path, tile_measure, maps_to_use=3000)
