@@ -175,7 +175,7 @@ def train_one_epoch(model, loader, optimizer, scaler, bce, dice, device, tile_si
 
         optimizer.zero_grad()
 
-        with torch.cuda.amp.autocast():
+        with torch.amp.autocast('cuda'):
             out = model(imgs)
             loss = bce(out, masks)
             if dice:
@@ -274,11 +274,11 @@ def main():
     bce, dice = build_loss(args.loss, train_ds, device)
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
-    scaler = torch.cuda.amp.GradScaler()
+    scaler = torch.amp.GradScaler('cuda')
 
     run_name = f"{args.arch}_{args.mode}_{args.loss}_dim{args.tile_size}_n{len(train_loader)}_bs{args.batch_size}"
-    out_dir = os.path.join(args.output_dir, args.dataset_name)
-    os.path.join(out_dir, run_name)
+    out_dir_ = os.path.join(args.output_dir, args.dataset_name)
+    out_dir = os.path.join(out_dir_, run_name)
     os.makedirs(out_dir, exist_ok=True)
 
     logger = MetricsLogger(out_dir)
@@ -299,7 +299,8 @@ def main():
         print(
             f"[{epoch}/{args.epochs}]\t"
             f"TRAIN loss {tr['loss']:.4f} IoU {tr['iou']:.3f} | "
-            f"VAL loss {va['loss']:.4f} IoU {va['iou']:.3f}"
+            f"VAL loss {va['loss']:.4f} IoU {va['iou']:.3f} | "
+            f"Time {epoch_time:.1f}s"
         )
 
         if va["loss"] < best_val:
