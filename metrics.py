@@ -3,6 +3,8 @@ import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
 
+#python metrics.py --runs_path /home/antoniocorvino/Projects/BuildingsExtraction/runs --models unetLL_IAD_BCEplusDL_n56000_dim256x256_bs32 unetLL_IAD_WBCEplusDL_n56000_dim256x256_bs32  unetLL_WHUtiles_WBCEplusDL_n24000_dim256x256_bs32  --compute_f1 --plots  --summary
+
 
 # --------------------------------------------------
 # Configuration

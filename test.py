@@ -13,6 +13,10 @@ import numpy as np
 
 from unet import UNet, UNetL, UNetLL
 
+#python test.py --dataset_path /mnt/nas151/sar/Footprint/datasets --dataset_name InriaBuildingDataset --tile_size 256 --split test --models unetLL_tiles_WBCEplusDL_n56000_dim256_b32 --images austin34_27 chicago13_77 kitsap16_47 --device cuda
+
+
+
 def MaskPredict(dataset_name, model_name, image_name, pred_mask, ref_mask):
     """
     Save predicted mask with same size, format, and aspect as reference mask.
