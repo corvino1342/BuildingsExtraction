@@ -17,7 +17,7 @@ from unet import UNet, UNetL, UNetLL
 
 
 
-def MaskPredict(dataset_name, model_name, image_name, pred_mask, ref_mask):
+def MaskPredict(base_out, model_name, image_name, pred_mask, ref_mask):
     """
     Save predicted mask with same size, format, and aspect as reference mask.
     """
@@ -31,10 +31,9 @@ def MaskPredict(dataset_name, model_name, image_name, pred_mask, ref_mask):
     if pred_img.size != ref_mask.size:
         pred_img = pred_img.resize(ref_mask.size, resample=Image.NEAREST)
 
-    os.makedirs(f'/home/antoniocorvino/Projects/BuildingsExtraction/runs/{dataset_name}/{model_name}/predict/', exist_ok=True)
-    
+
     save_path = (
-        f"/home/antoniocorvino/Projects/BuildingsExtraction/runs/{dataset_name}/{model_name}/predict/{image_name}.tif"
+        f"{base_out}/predict/{image_name}.tif"
     )
 
     pred_img.save(save_path)
@@ -76,7 +75,7 @@ def ShortModelName(model_name):
 
     return f"{arch} | {dt} | {loss} | {lr} | {dim} | {bs}"
 # === Utility: Visualize predicted building mask overlay with confusion colors ===
-def Overlay(dataset_name, model_name, image, image_name, pred_mask, true_mask, alpha=0.4):
+def Overlay(base_out, model_name, image, image_name, pred_mask, true_mask, alpha=0.4):
     """
     Overlay predicted building mask and ground truth on the original image.
     Highlights:
@@ -120,13 +119,12 @@ def Overlay(dataset_name, model_name, image, image_name, pred_mask, true_mask, a
             patches.Patch(facecolor='red', label='False Negative'),
         ]
         ax.legend(handles=legend_elements, loc='upper left', fontsize=12)
-        os.makedirs(f'/home/antoniocorvino/Projects/BuildingsExtraction/runs/{dataset_name}/{model_name}/overlay/', exist_ok=True)
 
-        plt.savefig(f'/home/antoniocorvino/Projects/BuildingsExtraction/runs/{dataset_name}/{model_name}/overlay/{image_name}.tif')
+        plt.savefig(f'{base_out}/overlay/{image_name}.tif')
         #plt.show()
         plt.close()
 
-def ThreePlot(dataset_name, model_name, image, image_name, pred_mask, true_mask):
+def ThreePlot(base_out, model_name, image, image_name, pred_mask, true_mask):
     if true_mask is None:
         ncols = 2
     else:
@@ -170,9 +168,8 @@ def ThreePlot(dataset_name, model_name, image, image_name, pred_mask, true_mask)
             borderaxespad=0,
             fontsize=12
         )
-    os.makedirs(f'/home/antoniocorvino/Projects/BuildingsExtraction/runs/{dataset_name}/{model_name}/threeplot/', exist_ok=True)
 
-    plt.savefig(f'/home/antoniocorvino/Projects/BuildingsExtraction/runs/{dataset_name}/{model_name}/threeplot/{image_name}.tif')
+    plt.savefig(f'{base_out}/threeplot/{image_name}.tif')
     #plt.show()
     plt.close()
 
