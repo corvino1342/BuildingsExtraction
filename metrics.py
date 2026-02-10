@@ -1,142 +1,160 @@
-import matplotlib.pyplot as plt
+import os
+import argparse
 import pandas as pd
-from click import style
+import matplotlib.pyplot as plt
 
-metrics = ['epoch_loss', 'iou', 'precision', 'recall', 'f1']
 
+# --------------------------------------------------
+# Configuration
+# --------------------------------------------------
+METRICS = ['epoch_loss', 'iou', 'precision', 'recall', 'f1']
+
+COLORS = [
+    (0.12, 0.47, 0.71),  # blue
+    (1.00, 0.50, 0.05),  # orange
+    (0.17, 0.63, 0.17),  # green
+    (0.84, 0.15, 0.16),  # red
+    (0.58, 0.40, 0.74),  # purple
+    (0.55, 0.34, 0.29),  # brown
+    (0.00, 0.62, 0.60),  # cyan
+]
+
+
+# --------------------------------------------------
+# Utilities
+# --------------------------------------------------
 def ShortModelName(model_name):
-    """
-    Create a compact, human-readable model identifier for plots.
-    Example:
-    unet_IAD_WBCE_lr0p0001_n28000_dim256x256_bs32
-    -> UNet | IAD | WBCE | 1e-04 | 256 | bs32
-    """
     parts = model_name.split('_')
 
     arch = parts[0].upper() if parts else "MODEL"
-
-    dt = parts[1]
-
-    loss = parts[2]
+    dataset = parts[1] if len(parts) > 1 else "DATA"
+    loss = parts[2] if len(parts) > 2 else "LOSS"
 
     lr_part = next((p for p in parts if p.startswith("lr")), None)
-
-    if lr_part is None:
-        lr = "lr_var"
+    if lr_part:
+        lr_raw = lr_part[2:]
+        lr = f"{float(lr_raw.replace('p', '.')):.0e}" if 'p' in lr_raw else lr_raw
     else:
-        lr_raw = lr_part[2:]  # strip 'lr'
-
-        if 'e' in lr_raw:
-            # already in scientific notation
-            lr = lr_raw
-        elif 'p' in lr_raw:
-            # convert 0p0001 -> 1e-04
-            value = float(lr_raw.replace('p', '.'))
-            lr = f"{value:.0e}"
+        lr = "lr?"
 
     dim = next((p.replace("dim", "") for p in parts if p.startswith("dim")), "dim?")
-    dim = dim.split('x')[0]  # keep only one spatial dimension
+    dim = dim.split('x')[0]
 
     bs = next((p for p in parts if p.startswith("bs")), "bs?")
 
-    return f"{arch} | {dt} | {loss} | {lr} | {dim} | {bs}"
+    return f"{arch} | {dataset} | {loss} | {lr} | {dim} | {bs}"
 
-def F1Score(path, model_names):
-    for model_name in model_names:
-        df = pd.read_csv(f'{path}/{model_name}/metrics.csv')
 
-        df[f'train_f1'] = 2 * (df['train_precision'] * df['train_recall']) / (df['train_precision'] + df['train_recall'])
-        df[f'val_f1'] = 2 * (df['val_precision'] * df['val_recall']) / (df['val_precision'] + df['val_recall'])
+# --------------------------------------------------
+# Core logic
+# --------------------------------------------------
+def compute_f1(runs_path, model_names):
+    for model in model_names:
+        csv_path = f"{runs_path}/{model}/metrics.csv"
+        df = pd.read_csv(csv_path)
 
-        df.to_csv(f'{path}/{model_name}/metrics.csv')
+        df['train_f1'] = (
+            2 * df['train_precision'] * df['train_recall']
+            / (df['train_precision'] + df['train_recall'])
+        )
+        df['val_f1'] = (
+            2 * df['val_precision'] * df['val_recall']
+            / (df['val_precision'] + df['val_recall'])
+        )
 
-def Plots(path, model_names):
+        df.to_csv(csv_path, index=False)
 
-    colors = [
-        (0.12, 0.47, 0.71),  # blue
-        (1.00, 0.50, 0.05),  # orange
-        (0.17, 0.63, 0.17),  # green
-        (0.84, 0.15, 0.16),  # red
-        (0.58, 0.40, 0.74),  # purple
-        (0.55, 0.34, 0.29),  # brown
-        (0.00, 0.62, 0.60),  # cyan
-    ]
 
-    for i, metric in enumerate(metrics, 1):
-        plt.style.use('seaborn-v0_8-darkgrid')
+def plot_metrics(runs_path, model_names):
+    out_dir = f"{runs_path}/comparison"
+    os.makedirs(out_dir, exist_ok=True)
+
+    plt.style.use('seaborn-v0_8-darkgrid')
+
+    for metric in METRICS:
         plt.figure(figsize=(14, 7))
-        for model_name in model_names:
 
-            df = pd.read_csv(f'{path}/{model_name}/metrics.csv')
-            # Metric Plots
+        for idx, model in enumerate(model_names):
+            df = pd.read_csv(f"{runs_path}/{model}/metrics.csv")
             epochs = df['epoch']
+            short_name = ShortModelName(model)
 
-            short_name = ShortModelName(model_name)
-
-            idx = model_names.index(model_name)
-            # --- Plot training & validation metrics ---
             plt.plot(
                 epochs,
-                df[f'train_{metric}'],
-                color=colors[idx],
+                df[f"train_{metric}"],
+                color=COLORS[idx % len(COLORS)],
                 linewidth=3,
-                alpha=0.9,
                 linestyle='-',
-                label=f'Train | {short_name}'
+                label=f"Train | {short_name}"
             )
+
             plt.plot(
                 epochs,
-                df[f'val_{metric}'],
-                color=colors[idx],
+                df[f"val_{metric}"],
+                color=COLORS[idx % len(COLORS)],
                 linewidth=3,
-                alpha=0.9,
                 linestyle=':',
-                label=f'Val   | {short_name}'
+                label=f"Val   | {short_name}"
             )
 
+        plt.title(f"Training and Validation {metric}", fontsize=16, weight='bold')
+        plt.xlabel("Epoch", fontsize=13)
+        plt.ylabel(metric, fontsize=13)
+        plt.legend(fontsize=9, frameon=True, bbox_to_anchor=(1, 1))
+        plt.tight_layout()
+
+        plt.savefig(f"{out_dir}/{metric}.png", dpi=300, bbox_inches='tight')
+        plt.close()
 
 
-
-            # --- Titles and labels ---
-            plt.title(f'Training and Validation {metric}', fontsize=16, weight='bold', pad=15)
-            plt.xlabel('Epoch', fontsize=13)
-            plt.ylabel(f'{metric}', fontsize=13)
-
-            # --- Legend and style tweaks ---
-            plt.legend(fontsize=9, frameon=True, facecolor='white', shadow=True, bbox_to_anchor=(1, 1))
-            plt.grid(True, which='major', linestyle='--', linewidth=0.7, alpha=0.7)
-            plt.tight_layout()
-
-        plt.savefig(f'{path}/comparison/{metric}.png', dpi=300, bbox_inches='tight')
-        #plt.show()
-
-def ValuesReached(path, model_names):
-    for model_name in model_names:
-        print(f'\n--------- {ShortModelName(model_name)} ---------\n')
-        df = pd.read_csv(f'{path}/{model_name}/metrics.csv')
+def print_summary(runs_path, model_names):
+    for model in model_names:
+        df = pd.read_csv(f"{runs_path}/{model}/metrics.csv")
 
         total_seconds = df['time'].sum()
-        hours, remainder = divmod(total_seconds, 3600)
-        minutes = remainder // 60
-        print(f"Time spent: {int(hours)}:{int(minutes):02d} hours for {df['epoch'].iloc[-1]} epochs\n")
+        hours, rem = divmod(total_seconds, 3600)
+        minutes = rem // 60
 
-        print('VALUES REACHED')
-        print(f"\t --- TRAIN --- \t --- VALID ---")
-        print(f"Loss --- {df['train_epoch_loss'].iloc[-1]:.3f} --- \t --- {df['val_epoch_loss'].iloc[-1]:.3f} ---")
-        print(f"IoU  --- {df['train_iou'].iloc[-1]:.3f} --- \t --- {df['val_iou'].iloc[-1]:.3f} ---")
-        print(f"Prec --- {df['train_precision'].iloc[-1]:.3f} --- \t --- {df['val_precision'].iloc[-1]:.3f} ---")
-        print(f"Rec  --- {df['train_recall'].iloc[-1]:.3f} --- \t --- {df['val_recall'].iloc[-1]:.3f} ---")
-        print(f"F1   --- {df['train_f1'].iloc[-1]:.3f} --- \t --- {df['val_f1'].iloc[-1]:.3f} ---\n")
+        print(f"\n--------- {ShortModelName(model)} ---------")
+        print(f"Time spent: {int(hours)}:{int(minutes):02d} hours ({df['epoch'].iloc[-1]} epochs)\n")
+
+        print("FINAL VALUES")
+        print(f"{'':8s} TRAIN      VALID")
+        print(f"Loss    {df['train_epoch_loss'].iloc[-1]:.3f}     {df['val_epoch_loss'].iloc[-1]:.3f}")
+        print(f"IoU     {df['train_iou'].iloc[-1]:.3f}     {df['val_iou'].iloc[-1]:.3f}")
+        print(f"Prec    {df['train_precision'].iloc[-1]:.3f}     {df['val_precision'].iloc[-1]:.3f}")
+        print(f"Recall  {df['train_recall'].iloc[-1]:.3f}     {df['val_recall'].iloc[-1]:.3f}")
+        print(f"F1      {df['train_f1'].iloc[-1]:.3f}     {df['val_f1'].iloc[-1]:.3f}")
 
 
-model_names = [
-               'unetLL_IAD_BCEplusDL_n56000_dim256x256_bs32',
-               'unetLL_IAD_WBCEplusDL_n56000_dim256x256_bs32',
-                'unetLL_WHUtiles_WBCEplusDL_n24000_dim256x256_bs32'
-               ]
+# --------------------------------------------------
+# CLI
+# --------------------------------------------------
+def parse_args():
+    parser = argparse.ArgumentParser("Training metrics analysis")
 
-metrics_path = '/home/antoniocorvino/Projects/BuildingsExtraction/runs'
+    parser.add_argument("--runs_path", type=str, required=True)
+    parser.add_argument("--models", nargs="+", required=True)
 
-F1Score(path=metrics_path, model_names=model_names)
-Plots(path=metrics_path, model_names=model_names)
-ValuesReached(path=metrics_path, model_names=model_names)
+    parser.add_argument("--compute_f1", action="store_true")
+    parser.add_argument("--plots", action="store_true")
+    parser.add_argument("--summary", action="store_true")
+
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+
+    if args.compute_f1:
+        compute_f1(args.runs_path, args.models)
+
+    if args.plots:
+        plot_metrics(args.runs_path, args.models)
+
+    if args.summary:
+        print_summary(args.runs_path, args.models)
+
+
+if __name__ == "__main__":
+    main()

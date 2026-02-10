@@ -1,16 +1,19 @@
-import torch
 from matplotlib.pyplot import title
 from torchvision import transforms
 from PIL import Image
 import matplotlib.pyplot as plt
-from unet import UNet, UNetL, UNetLL
-import time
-import numpy as np
 from matplotlib import colors
 from matplotlib import patches
-import os
 
-def MaskPredict(model_name, image_name, pred_mask, ref_mask):
+import os
+import time
+import argparse
+import torch
+import numpy as np
+
+from unet import UNet, UNetL, UNetLL
+
+def MaskPredict(dataset_name, model_name, image_name, pred_mask, ref_mask):
     """
     Save predicted mask with same size, format, and aspect as reference mask.
     """
@@ -24,9 +27,10 @@ def MaskPredict(model_name, image_name, pred_mask, ref_mask):
     if pred_img.size != ref_mask.size:
         pred_img = pred_img.resize(ref_mask.size, resample=Image.NEAREST)
 
+    os.makedirs(f'/home/antoniocorvino/Projects/BuildingsExtraction/runs/{dataset_name}/{model_name}/predict/', exist_ok=True)
+    
     save_path = (
-        f"/Users/corvino/PycharmProjects/BuildingsExtraction/"
-        f"predictions/test/{model_name}/{image_name}_predict.tif"
+        f"/home/antoniocorvino/Projects/BuildingsExtraction/runs/{dataset_name}/{model_name}/predict/{image_name}.tif"
     )
 
     pred_img.save(save_path)
@@ -68,7 +72,7 @@ def ShortModelName(model_name):
 
     return f"{arch} | {dt} | {loss} | {lr} | {dim} | {bs}"
 # === Utility: Visualize predicted building mask overlay with confusion colors ===
-def Overlay(model_name, image, image_name, pred_mask, true_mask, alpha=0.4):
+def Overlay(dataset_name, model_name, image, image_name, pred_mask, true_mask, alpha=0.4):
     """
     Overlay predicted building mask and ground truth on the original image.
     Highlights:
@@ -112,11 +116,13 @@ def Overlay(model_name, image, image_name, pred_mask, true_mask, alpha=0.4):
             patches.Patch(facecolor='red', label='False Negative'),
         ]
         ax.legend(handles=legend_elements, loc='upper left', fontsize=12)
-        plt.savefig(f'/Users/corvino/PycharmProjects/BuildingsExtraction/predictions/test/{model_name}/{image_name}_overlay.tif')
+        os.makedirs(f'/home/antoniocorvino/Projects/BuildingsExtraction/runs/{dataset_name}/{model_name}/overlay/', exist_ok=True)
+
+        plt.savefig(f'/home/antoniocorvino/Projects/BuildingsExtraction/runs/{dataset_name}/{model_name}/overlay/{image_name}.tif')
         #plt.show()
         plt.close()
 
-def ThreePlot(model_name, image, image_name, pred_mask, true_mask):
+def ThreePlot(dataset_name, model_name, image, image_name, pred_mask, true_mask):
     if true_mask is None:
         ncols = 2
     else:
@@ -160,79 +166,141 @@ def ThreePlot(model_name, image, image_name, pred_mask, true_mask):
             borderaxespad=0,
             fontsize=12
         )
+    os.makedirs(f'/home/antoniocorvino/Projects/BuildingsExtraction/runs/{dataset_name}/{model_name}/threeplot/', exist_ok=True)
 
-    plt.savefig(f'/Users/corvino/PycharmProjects/BuildingsExtraction/predictions/test/{model_name}/{image_name}_multiple.tif')
+    plt.savefig(f'/home/antoniocorvino/Projects/BuildingsExtraction/runs/{dataset_name}/{model_name}/threeplot/{image_name}.tif')
     #plt.show()
     plt.close()
 
-# === Initial Configuration ===
 
-models = {
-          'unetLL_IAD_BCEplusDL_n56000_dim256x256_bs32': UNetLL,
-          'unetLL_IAD_WBCEplusDL_n56000_dim256x256_bs32': UNetLL
-          }
 
-# === Prepare the image ===
-start = time.time()
 
-#path = 'MassachusettsBuildingsDataset/tiles/test'
-#image_name = '22828930_15_5'
+# --------------------------------------------------
+# CLI
+# --------------------------------------------------
+def parse_args():
+    parser = argparse.ArgumentParser("Building footprint inference")
 
-#image_name = 'sangiovted5'
-#img = Image.open(f'/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/fotoxtest/{image_name}.png').convert("RGB")
+    parser.add_argument("--dataset_path", type=str, required=True)
+    parser.add_argument("--dataset_name", type=str, required=True)
+    parser.add_argument("--tile_size", type=int, default=256)
+    parser.add_argument("--split", type=str, default="test")
 
-path = 'InriaAerialDataset/tiles_512/test'
-image_names = ['austin34_27', 'chicago13_77', 'kitsap16_47', 'tyrol-w29_38' , 'vienna9_7']
+    parser.add_argument("--models", nargs="+", required=True,
+                        help="List of model run names")
 
-for image_name in image_names:
+    parser.add_argument("--images", nargs="+", required=True,
+                        help="Image base names without extension")
 
-    img = Image.open(
-        f'/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/{path}/images/{image_name}.tif').convert("RGB")
-    mask = Image.open(
-        f'/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/{path}/gt/{image_name}.tif').convert("L")
+    parser.add_argument("--device", type=str, default="cuda",
+                        choices=["cuda", "cpu", "mps"])
 
-    print(f'\n{image_name}\n')
+    parser.add_argument("--threshold", type=float, default=0.5)
 
-    transform = transforms.Compose([transforms.ToTensor(), ])
+    return parser.parse_args()
 
-    input_tensor = transform(img).unsqueeze(0)
-    print(f'Time for Image Preparation: {(time.time() - start):.3f} s')
-    for model_name in models:
 
-        print(f'######## {model_name} ########')
+# --------------------------------------------------
+# Model factory
+# --------------------------------------------------
+def build_model(model_name):
+    if model_name.startswith("unetLL"):
+        return UNetLL(3, 1)
+    if model_name.startswith("unetL"):
+        return UNetL(3, 1)
+    if model_name.startswith("unet"):
+        return UNet(3, 1)
+    raise ValueError(f"Unknown model type: {model_name}")
 
-        model_path = f"/Users/corvino/PycharmProjects/BuildingsExtraction/runs/{model_name}/best_model.pth"
 
-        # === Load the model ===
+# --------------------------------------------------
+# Main
+# --------------------------------------------------
+def main():
+    args = parse_args()
+
+    device = torch.device(
+        args.device if torch.cuda.is_available() or args.device != "cuda" else "cpu"
+    )
+
+    print(f"\nDevice: {device}")
+    print(f"Models: {args.models}")
+    print(f"Images: {args.images}\n")
+
+    transform = transforms.ToTensor()
+
+    # --------------------------------------------------
+    # Load models ONCE
+    # --------------------------------------------------
+    models = {}
+    for name in args.models:
         start = time.time()
 
-        model = models[model_name](n_channels=3, n_classes=1)
+        model = build_model(name).to(device)
+        ckpt = f"/home/antoniocorvino/Projects/BuildingsExtraction/runs/{args.dataset_name}/{name}/best_model.pth"
 
-        model.load_state_dict(torch.load(model_path, map_location=torch.device("mps")), strict=False)
+        model.load_state_dict(
+            torch.load(ckpt, map_location=device),
+            strict=False
+        )
         model.eval()
-        print(f'Time for Loading the Model: {(time.time()-start):.3f} s')
 
-        # === Inference ===
-        start = time.time()
+        models[name] = model
+        print(f"Loaded {name} in {(time.time()-start):.2f}s")
 
-        with torch.no_grad():
-            output = model(input_tensor)
-            prediction = torch.sigmoid(output)
-            binary_mask = (prediction > 0.5).float()
-        print(f'Time for Inference: {(time.time()-start):.3f} s')
+    # --------------------------------------------------
+    # Inference loop
+    # --------------------------------------------------
+    total_start = time.time()
 
-        # === Visualization ===
+    for image_name in args.images:
 
-        # Convert masks to numpy
-        true_mask = np.array(mask) > 0
-        binary_mask_np = binary_mask.squeeze().numpy()
+        img_path = (
+            f"{args.dataset_path}/{args.dataset_name}/tiles_{args.tile_size}/"
+            f"{args.split}/images/{image_name}.tif"
+        )
+        mask_path = (
+            f"{args.dataset_path}/{args.dataset_name}/tiles_{args.tile_size}/"
+            f"{args.split}/gt/{image_name}.tif"
+        )
 
-        os.makedirs(f'/Users/corvino/PycharmProjects/BuildingsExtraction/predictions/test/{model_name}', exist_ok=True)
+        image = Image.open(img_path).convert("RGB")
+        true_mask = Image.open(mask_path).convert("L") if os.path.exists(mask_path) else None
 
-        # Saving the result mask
-        MaskPredict(model_name, image_name, binary_mask_np, mask)
-        Overlay(model_name, img, image_name, binary_mask_np, true_mask)
-        ThreePlot(model_name, img, image_name, binary_mask_np, true_mask)
+        input_tensor = transform(image).unsqueeze(0).to(device)
+
+        print(f"\nImage: {image_name}")
+        print(f"Input shape: {input_tensor.shape}")
+
+        for model_name, model in models.items():
+
+            start = time.time()
+            with torch.no_grad():
+                logits = model(input_tensor)
+                prob = torch.sigmoid(logits)
+                pred = (prob > args.threshold).float()
+
+            infer_time = time.time() - start
+
+            pred_np = pred.squeeze().cpu().numpy()
+            gt_np = np.array(true_mask) > 0 if true_mask else None
+
+
+            MaskPredict(args.dataset_name, model_name, image_name, pred_np, true_mask)
+            Overlay(args.dataset_name, model_name, image, image_name, pred_np, gt_np)
+            ThreePlot(args.dataset_name, model_name, image, image_name, pred_np, gt_np)
+
+            print(
+                f"  {model_name:<40} "
+                f"Inference: {infer_time:.3f}s | "
+                f"Foreground ratio: {pred_np.mean():.3f}"
+            )
+
+    print(f"\nTotal inference time: {(time.time()-total_start):.2f}s")
+
+
+if __name__ == "__main__":
+    main()
 
 
 
