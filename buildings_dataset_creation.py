@@ -1,93 +1,163 @@
-# THIS CODE MUST RUN ON ALIENWARE OR THE LOCAL PC (WITH SOME UN-COMMENT) BECAUSE OF THE ACCESS TO THE DATASET
+# buildings_dataset_creation.py
 from PIL import Image
 import os
 import shutil
+import argparse
+import csv
 from tqdm import tqdm
+import numpy as np
 
-def clear_tiles_directory(dataset_name, dataset_path, tile_measure):
-    if os.path.exists(f'{dataset_path}/{dataset_name}/tiles_{tile_measure}'):
-        print('Previous tiles erasing...')
-        shutil.rmtree(f'{dataset_path}/{dataset_name}/tiles_{tile_measure}')
-        print('DONE!\n\n\n')
-    os.makedirs(f'{dataset_path}/{dataset_name}/tiles_{tile_measure}')
+#python buildings_dataset_creation.py --dataset_name  WHUBuildingDataset --dataset_path /mnt/nas151/sar/Footprint/datasets
+# --tile_size 128 --stride --maps_to_use -1 --splits train --skip_empty --fg_threshold --overwrite --save_stats
+# --------------------------------------------------
+# Argument parser
+# --------------------------------------------------
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Create tiles for building footprint datasets"
+    )
 
+    parser.add_argument("--dataset_name", type=str, required=True)
+    parser.add_argument("--dataset_path", type=str, required=True)
 
-def tiles_creation(dataset_name, dataset_path, tile_measure, maps_to_use):
+    parser.add_argument("--tile_size", type=int, default=256)
+    parser.add_argument("--stride", type=int, default=None,
+                        help="Stride for sliding window (default: tile_size)")
 
-    os.makedirs(f'{dataset_path}/{dataset_name}/tiles', exist_ok=True)
+    parser.add_argument("--maps_to_use", type=int, default=-1)
+    parser.add_argument("--splits", nargs="+", default=["train", "val"])
 
-    for dataset_type in ['train', 'val']:
+    parser.add_argument("--skip_empty", action="store_true",
+                        help="Skip tiles with little/no foreground")
 
-        print(f'Dataset type ------- {dataset_type}')
+    parser.add_argument("--fg_threshold", type=float, default=0.01,
+                        help="Minimum foreground ratio to keep tile while --skip_empty is called")
 
-        gt = True
-        #if not os.path.exists(f'/home/antoniocorvino/Projects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/gt'):
-        #if not os.path.exists( f'/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/gt'):
-        if not os.path.exists(f'/mnt/nas151/sar/Footprint/datasets/{dataset_name}/tiles/{dataset_type}/gt'):
+    parser.add_argument("--overwrite", action="store_true")
 
-            print(f'---------{dataset_type} dataset has not Ground Truth---------')
-            gt = False
+    parser.add_argument("--save_stats", action="store_true",
+                        help="Save tile statistics to CSV")
 
-        os.makedirs(f'{dataset_path}/{dataset_name}/tiles_{tile_measure}/{dataset_type}/', exist_ok=True)
-        os.makedirs(f'{dataset_path}/{dataset_name}/tiles_{tile_measure}/{dataset_type}/images', exist_ok=True)
-        os.makedirs(f'{dataset_path}/{dataset_name}/tiles_{tile_measure}/{dataset_type}/gt', exist_ok=True)
-
-        full_maps = sorted(os.path.splitext(f)[0] for f in os.listdir(f'{dataset_path}/{dataset_name}/tiles/{dataset_type}/images') if f.lower().endswith(('.tif', '.tiff', '.png', '.jpg', '.TIF')))
-
-        if (maps_to_use-len(full_maps)) >= 0:
-            maps_to_use = len(full_maps)
-        print(f'Maps used in {dataset_type}: {maps_to_use}/{len(full_maps)}..................')
-
-        full_maps = full_maps[:maps_to_use]
+    return parser.parse_args()
 
 
-        for name in tqdm(full_maps, desc=f'Processing {dataset_type} tiles...'):
-            #image = Image.open(f'/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/images/{name}.tif')
-            #image = Image.open(f'/home/antoniocorvino/Projects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/images/{name}.tif')
-            image = Image.open(f'/mnt/nas151/sar/Footprint/datasets/{dataset_name}/tiles/{dataset_type}/images/{name}.TIF')
-            if gt:
-                #mask = Image.open(f'/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/gt/{name}.tif')
-                #mask = Image.open(f'/home/antoniocorvino/Projects/BuildingsExtraction/datasets/{dataset_name}/{dataset_type}/gt/{name}.tif')
-                mask = Image.open(f'/mnt/nas151/sar/Footprint/datasets/{dataset_name}/tiles/{dataset_type}/gt/{name}.tif')
+# --------------------------------------------------
+# Utilities
+# --------------------------------------------------
+def clear_tiles_directory(dataset_path, dataset_name, tile_size):
+    out_dir = f"{dataset_path}/{dataset_name}/tiles_{tile_size}"
+    if os.path.exists(out_dir):
+        shutil.rmtree(out_dir)
+    os.makedirs(out_dir, exist_ok=True)
 
-            count = 0
 
-            width, height = image.size
+# --------------------------------------------------
+# Main tiling logic
+# --------------------------------------------------
+def tiles_creation(args):
 
-            for i in range(0, height, tile_measure):
-                for j in range(0, width, tile_measure):
-                    count += 1
-                    box = (j, i, j + tile_measure, i + tile_measure)
+    tile_size = args.tile_size
+    stride = args.stride if args.stride else tile_size
 
-                    if gt:
+    base_tiles_dir = f"{args.dataset_path}/{args.dataset_name}/tiles"
+    out_root = f"{args.dataset_path}/{args.dataset_name}/tiles_{tile_size}"
+
+    stats = []
+
+    for split in args.splits:
+
+        print(f"\nProcessing split: {split}")
+
+        image_dir = f"{base_tiles_dir}/{split}/images"
+        gt_dir = f"{base_tiles_dir}/{split}/gt"
+        has_gt = os.path.exists(gt_dir)
+
+        out_img_dir = f"{out_root}/{split}/images"
+        out_gt_dir = f"{out_root}/{split}/gt"
+        os.makedirs(out_img_dir, exist_ok=True)
+        os.makedirs(out_gt_dir, exist_ok=True)
+
+        image_names = sorted(
+            os.path.splitext(f)[0]
+            for f in os.listdir(image_dir)
+            if f.lower().endswith((".tif", ".tiff", ".png", ".jpg"))
+        )
+
+        if args.maps_to_use > 0:
+            image_names = image_names[:args.maps_to_use]
+
+        for name in tqdm(image_names, desc=f"Tiling {split}"):
+
+            img = Image.open(f"{image_dir}/{name}.TIF")
+            if has_gt:
+                mask = Image.open(f"{gt_dir}/{name}.tif")
+
+            W, H = img.size
+            tile_id = 0
+
+            for y in range(0, H - tile_size + 1, stride):
+                for x in range(0, W - tile_size + 1, stride):
+
+                    box = (x, y, x + tile_size, y + tile_size)
+                    img_tile = img.crop(box)
+
+                    if has_gt:
                         mask_tile = mask.crop(box)
+                        mask_np = np.array(mask_tile) > 0
+                        fg_ratio = mask_np.mean()
+                    else:
+                        fg_ratio = 0.0
 
-                        #if (mask_tile.size != (tile_measure, tile_measure) or
-                        #    mask_tile.getextrema() == ((0, 0), (0, 0), (0, 0)) or
-                        #    mask_tile.getextrema() == (0, 0)):                      # VERIFICARE COME MAI I DUE DATASET SALVANO IN MODO DIVERSO LE MASCHERE, UNO RGB E UNA BW
+                    if args.skip_empty and has_gt:
+                        if fg_ratio < args.fg_threshold:
+                            continue
 
-                        #    skipped += 1
-                        #    continue
-                    #print('Tiles skipped: {skipped}/{count} ({(100 * skipped / count):.1f}%)\n\n')
-                    image_tile = image.crop(box)
-                    image_tile.save(f'{dataset_path}/{dataset_name}/tiles_{tile_measure}/{dataset_type}/images/{name}_{count}.tif')
-                    if gt:
-                        mask_tile.save(f'{dataset_path}/{dataset_name}/tiles_{tile_measure}/{dataset_type}/gt/{name}_{count}.tif')
+                    img_name = f"{name}_{tile_id:06d}.tif"
+                    img_tile.save(f"{out_img_dir}/{img_name}")
+
+                    if has_gt:
+                        mask_tile.save(f"{out_gt_dir}/{img_name}")
+
+                    if args.save_stats:
+                        stats.append({
+                            "split": split,
+                            "image": name,
+                            "tile_id": tile_id,
+                            "fg_ratio": fg_ratio
+                        })
+
+                    tile_id += 1
+
+    # --------------------------------------------------
+    # Save statistics
+    # --------------------------------------------------
+    if args.save_stats and stats:
+        stats_path = f"{out_root}/tile_statistics.csv"
+        with open(stats_path, "w", newline="") as f:
+            writer = csv.DictWriter(
+                f, fieldnames=["split", "image", "tile_id", "fg_ratio"]
+            )
+            writer.writeheader()
+            writer.writerows(stats)
+
+        print(f"\nTile statistics saved to: {stats_path}")
 
 
-# DEVO PROVARE A CALCOLARE LA MEDIA DEL VALORE DELLE MASCHERE PER CAPIRE SE SONO BILANCIATI I DATI
-# QUINDI, FARE TIPO LA SOMMA SUI PIXEL DELLE MASCHERE E POI DIVIDERE PER LA DIMENSIONE DELLA TILE. SE IL RISULTATO È CIRCA 0.5
-# ALLORA POSSO PENSARE CHE IL DATASET SIA BILANCIATO, CREDO
+# --------------------------------------------------
+# Entry point
+# --------------------------------------------------
+def main():
+    args = parse_args()
 
-server_path = '/home/antoniocorvino/Projects/BuildingsExtraction/datasets'
-nas_path = '/mnt/nas151/sar/Footprint/datasets'
-local_path = '/Users/corvino/PycharmProjects/BuildingsExtraction/datasets'
+    if args.overwrite:
+        clear_tiles_directory(
+            args.dataset_path,
+            args.dataset_name,
+            args.tile_size
+        )
 
-massachusetts_dataset_name = 'MassachusettsBuildingsDataset'
-aerial_dataset_name = 'InriaAerialDataset'
-whu_dataset_name = 'WHUBuildingDataset'
+    tiles_creation(args)
 
-tile_measure = 128
 
-clear_tiles_directory(whu_dataset_name, nas_path, tile_measure)
-tiles_creation(whu_dataset_name, nas_path, tile_measure, maps_to_use=3000)
+if __name__ == "__main__":
+    main()
