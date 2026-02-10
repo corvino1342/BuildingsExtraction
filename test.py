@@ -186,7 +186,13 @@ def parse_args():
     parser = argparse.ArgumentParser("Building footprint inference")
 
     parser.add_argument("--dataset_path", type=str, required=True)
-    parser.add_argument("--dataset_name", type=str, required=True)
+
+    parser.add_argument("--train_dataset", type=str, required=True,
+                        help="Dataset used to train the model")
+
+    parser.add_argument("--test_dataset", type=str, required=True,
+                        help="Dataset used for inference")
+
     parser.add_argument("--tile_size", type=int, default=256)
     parser.add_argument("--split", type=str, default="test")
 
@@ -241,7 +247,7 @@ def main():
         start = time.time()
 
         model = build_model(name).to(device)
-        ckpt = f"/home/antoniocorvino/Projects/BuildingsExtraction/runs/{args.dataset_name}/{name}/best_model.pth"
+        ckpt = f"/home/antoniocorvino/Projects/BuildingsExtraction/runs/{args.train_dataset}/{name}/best_model.pth"
 
         model.load_state_dict(
             torch.load(ckpt, map_location=device),
@@ -260,11 +266,11 @@ def main():
     for image_name in args.images:
 
         img_path = (
-            f"{args.dataset_path}/{args.dataset_name}/tiles_{args.tile_size}/"
+            f"{args.dataset_path}/{args.test_dataset}/tiles_{args.tile_size}/"
             f"{args.split}/images/{image_name}.tif"
         )
         mask_path = (
-            f"{args.dataset_path}/{args.dataset_name}/tiles_{args.tile_size}/"
+            f"{args.dataset_path}/{args.test_dataset}/tiles_{args.tile_size}/"
             f"{args.split}/gt/{image_name}.tif"
         )
 
@@ -277,6 +283,12 @@ def main():
         print(f"Input shape: {input_tensor.shape}")
 
         for model_name, model in models.items():
+            base_out = (
+                f"/home/antoniocorvino/Projects/BuildingsExtraction/runs/{args.test_dataset}/{model_name}/trained_on_{args.train_dataset}/"
+            )
+            os.makedirs(f"{base_out}/predict", exist_ok=True)
+            os.makedirs(f"{base_out}/overlay", exist_ok=True)
+            os.makedirs(f"{base_out}/threeplot", exist_ok=True)
 
             start = time.time()
             with torch.no_grad():
@@ -290,9 +302,9 @@ def main():
             gt_np = np.array(true_mask) > 0 if true_mask else None
 
 
-            MaskPredict(args.dataset_name, model_name, image_name, pred_np, true_mask)
-            Overlay(args.dataset_name, model_name, image, image_name, pred_np, gt_np)
-            ThreePlot(args.dataset_name, model_name, image, image_name, pred_np, gt_np)
+            MaskPredict(base_out, model_name, image_name, pred_np, true_mask)
+            Overlay(base_out, model_name, image, image_name, pred_np, gt_np)
+            ThreePlot(base_out, model_name, image, image_name, pred_np, gt_np)
 
             print(
                 f"  {model_name:<40} "
