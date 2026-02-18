@@ -1,0 +1,25 @@
+# Ignore experiment outputs
+runs/
+ouputs/
+logs/
+checkpoints/
+predictions/
+
+# Ignore large files
+*.pth
+*.pt
+*.ckpt
+*.png
+*.tif
+*.tiff
+*.TIF
+
+# Ignore notebook checkpoints
+.ipynb_checkpoints/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# MacOS
+.DS_Store
