@@ -15,7 +15,7 @@ from src.training.losses import build_loss
 from src.training.trainer import Trainer
 
 # Run from project root:
-# python -m scripts.train --dataset_path /mnt/nas151/sar/Footprint/data --dataset_name WHUBuildingDataset --mode tiles --fixed_size --tile_size 256 --batch_size 32 --epochs 30 --lr 0.001 --arch unetLL --loss wbce --output_dir /home/antoniocorvino/Projects/BuildingsExtraction/runs/
+# python -m scripts.train --dataset_path /mnt/nas151/sar/Footprint/datasets --dataset_name WHUBuildingDataset --mode tiles --fixed_size --tile_size 256 --batch_size 32 --epochs 30 --lr 0.001 --arch unetLL --loss wbce --output_dir /home/antoniocorvino/Projects/BuildingsExtraction/runs/
 
 
 
