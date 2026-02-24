@@ -31,7 +31,7 @@ def parse_args():
     parser.add_argument("--dataset_name", type=str, default="WHUBuildingDataset")
     parser.add_argument("--mode", type=str, choices=["tiles", "instances"], default="tiles") #if instances set batch_size to 1. UNet cannot handle batch with different tile size
 
-    parser.add_argument("--fixed_size", type=bool,  help="Enforce fixed tile size (recommended for semantic tiles)")
+    parser.add_argument("--fixed_size", action="store_true",  help="Enforce fixed tile size (recommended for semantic tiles)")
 
     parser.add_argument("--tile_size", type=int, default=256)
     parser.add_argument("--batch_size", type=int, default=4)
@@ -91,8 +91,7 @@ def main():
         shuffle=True,
         num_workers=args.num_workers,
         pin_memory=True,
-        persistent_workers=True
-    )
+        persistent_workers=args.num_workers > 0    )
 
     val_loader = DataLoader(
         val_ds,
@@ -100,8 +99,7 @@ def main():
         shuffle=False,
         num_workers=args.num_workers,
         pin_memory=True,
-        persistent_workers=True
-    )
+        persistent_workers=args.num_workers > 0    )
 
     from src.models.factory import build_model
     model = build_model(args.arch).to(device)
@@ -110,7 +108,13 @@ def main():
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
-    run_name = f"{args.arch}_{args.mode}_{args.loss}_dim{args.tile_size}_n{len(train_loader.dataset)}_bs{args.batch_size}"
+    run_name = (
+        f"{args.arch}_{args.mode}_{args.loss}"
+        f"_dim{args.tile_size}"
+        f"_n{len(train_loader.dataset)}"
+        f"_bs{args.batch_size}"
+    )
+
     out_dir_ = os.path.join(args.output_dir, args.dataset_name)
     out_dir = os.path.join(out_dir_, run_name)
     os.makedirs(out_dir, exist_ok=True)
@@ -119,18 +123,19 @@ def main():
 
     best_val = float("inf")
 
+    trainer = Trainer(
+        model=model,
+        optimizer=optimizer,
+        scaler=scaler,
+        bce=bce,
+        dice=dice,
+        device=device,
+        use_amp=(device.type == "cuda")
+    )
+
     for epoch in range(1, args.epochs + 1):
         start = time.time()
 
-        trainer = Trainer(
-            model=model,
-            optimizer=optimizer,
-            scaler=scaler,
-            bce=bce,
-            dice=dice,
-            device=device,
-            use_amp=(device.type == "cuda")
-        )
 
         tr = trainer.train_one_epoch(train_loader)
         va = trainer.validate(val_loader)
