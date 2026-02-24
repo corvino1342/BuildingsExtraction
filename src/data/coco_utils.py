@@ -11,7 +11,7 @@ import argparse
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="COCO processing for building footprint datasets"
+        description="COCO processing for building footprint data"
     )
 
     parser.add_argument(
@@ -48,10 +48,10 @@ def parse_args():
 
     
 #local path on macbook
-#common_path = '/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/WHUBuildingDataset'
+#common_path = '/Users/corvino/PycharmProjects/BuildingsExtraction/data/WHUBuildingDataset'
 
 #path of the nas
-common_path = '/mnt/nas151/sar/Footprint/datasets/WHUBuildingDataset'
+common_path = '/mnt/nas151/sar/Footprint/data/WHUBuildingDataset'
 
 dataset_kind = 'train'
 
@@ -389,10 +389,10 @@ def Plots(widths, heights, dataset_kind, class_):
     plt.close()
 
 #local path on macbook
-common_path = '/Users/corvino/PycharmProjects/BuildingsExtraction/datasets/WHUBuildingDataset'
+common_path = '/src/data/WHUBuildingDataset'
 
 #path of the nas
-common_path = '/mnt/nas151/sar/Footprint/datasets/WHUBuildingDataset'
+common_path = '/mnt/nas151/sar/Footprint/data/WHUBuildingDataset'
 
 dataset_kind = 'train'
 

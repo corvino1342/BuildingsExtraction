@@ -13,7 +13,7 @@ import numpy as np
 
 from unet import UNet, UNetL, UNetLL
 
-# python test.py   --dataset_path /mnt/nas151/sar/Footprint/datasets/  --train_dataset InriaBuildingDataset --test_dataset InriaBuildingDataset  --tile_size 256   --split test   --models unetLL_tiles_WBCEplusDL_n56000_dim256x256_bs32  --images austin34_27 chicago13_77 kitsap16_47   --device cuda
+# python test.py   --dataset_path /mnt/nas151/sar/Footprint/data/  --train_dataset InriaBuildingDataset --test_dataset InriaBuildingDataset  --tile_size 256   --split test   --models unetLL_tiles_WBCEplusDL_n56000_dim256x256_bs32  --images austin34_27 chicago13_77 kitsap16_47   --device cuda
 
 
 def MaskPredict(base_out, model_name, image_name, pred_mask, ref_mask):

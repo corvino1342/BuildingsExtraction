@@ -7,14 +7,14 @@ import csv
 from tqdm import tqdm
 import numpy as np
 
-#python buildings_dataset_creation.py --dataset_name  WHUBuildingDataset --dataset_path /mnt/nas151/sar/Footprint/datasets
+#python buildings_dataset_creation.py --dataset_name  WHUBuildingDataset --dataset_path /mnt/nas151/sar/Footprint/data
 # --tile_size 128 --stride --maps_to_use -1 --splits train --skip_empty --fg_threshold --overwrite --save_stats
 # --------------------------------------------------
 # Argument parser
 # --------------------------------------------------
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Create tiles for building footprint datasets"
+        description="Create tiles for building footprint data"
     )
 
     parser.add_argument("--dataset_name", type=str, required=True)
