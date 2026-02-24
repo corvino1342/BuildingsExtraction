@@ -2,6 +2,73 @@ import os
 import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
+import csv
+import torch
+
+
+#############################################################################
+#############################################################################
+#############################################################################
+
+
+# --------------------------------------------------
+# Metrics logger
+# --------------------------------------------------
+class MetricsLogger:
+    def __init__(self, output_dir, filename="metrics.csv"):
+        os.makedirs(output_dir, exist_ok=True)
+        self.csv_path = os.path.join(output_dir, filename)
+
+        self.header = [
+            "epoch",
+            "train_loss", "train_iou", "train_precision", "train_recall",
+            "val_loss", "val_iou", "val_precision", "val_recall",
+            "epoch_time_sec"
+        ]
+
+        if not os.path.exists(self.csv_path):
+            with open(self.csv_path, "w", newline="") as f:
+                csv.writer(f).writerow(self.header)
+
+    def log(self, epoch, tr, va, epoch_time):
+        row = [
+            epoch,
+            tr["loss"], tr["iou"], tr["precision"], tr["recall"],
+            va["loss"], va["iou"], va["precision"], va["recall"],
+            round(epoch_time, 2)
+        ]
+        with open(self.csv_path, "a", newline="") as f:
+            csv.writer(f).writerow(row)
+
+
+# --------------------------------------------------
+# Metrics (correct per-image averaging)
+# --------------------------------------------------
+def iou_score(preds, targets, threshold=0.5, eps=1e-6):
+    preds = (torch.sigmoid(preds) > threshold).float()
+    intersection = (preds * targets).sum(dim=(1, 2, 3))
+    union = preds.sum(dim=(1, 2, 3)) + targets.sum(dim=(1, 2, 3)) - intersection
+    return ((intersection + eps) / (union + eps)).mean()
+
+
+def precision_score(preds, targets, threshold=0.5, eps=1e-6):
+    preds = (torch.sigmoid(preds) > threshold).float()
+    tp = (preds * targets).sum(dim=(1, 2, 3))
+    pp = preds.sum(dim=(1, 2, 3))
+    return ((tp + eps) / (pp + eps)).mean()
+
+
+def recall_score(preds, targets, threshold=0.5, eps=1e-6):
+    preds = (torch.sigmoid(preds) > threshold).float()
+    tp = (preds * targets).sum(dim=(1, 2, 3))
+    ap = targets.sum(dim=(1, 2, 3))
+    return ((tp + eps) / (ap + eps)).mean()
+
+#############################################################################
+#############################################################################
+#############################################################################
+
+
 
 #python metrics.py --runs_path /home/antoniocorvino/Projects/BuildingsExtraction/runs --models unetLL_IAD_BCEplusDL_n56000_dim256x256_bs32 unetLL_IAD_WBCEplusDL_n56000_dim256x256_bs32  unetLL_WHUtiles_WBCEplusDL_n24000_dim256x256_bs32  --compute_f1 --plots  --summary
 
@@ -9,7 +76,7 @@ import matplotlib.pyplot as plt
 # --------------------------------------------------
 # Configuration
 # --------------------------------------------------
-METRICS = ['epoch_loss', 'iou', 'precision', 'recall', 'f1']
+METRICS = ['loss', 'iou', 'precision', 'recall', 'f1']
 
 COLORS = [
     (0.12, 0.47, 0.71),  # blue
@@ -57,11 +124,11 @@ def compute_f1(runs_path, model_names):
 
         df['train_f1'] = (
             2 * df['train_precision'] * df['train_recall']
-            / (df['train_precision'] + df['train_recall'])
+            / (df['train_precision'] + df['train_recall'] + 1e-8)
         )
         df['val_f1'] = (
             2 * df['val_precision'] * df['val_recall']
-            / (df['val_precision'] + df['val_recall'])
+            / (df['val_precision'] + df['val_recall'] + 1e-8)
         )
 
         df.to_csv(csv_path, index=False)
@@ -113,7 +180,7 @@ def print_summary(runs_path, model_names):
     for model in model_names:
         df = pd.read_csv(f"{runs_path}/{model}/metrics.csv")
 
-        total_seconds = df['time'].sum()
+        total_seconds = df['epoch_time_sec'].sum()
         hours, rem = divmod(total_seconds, 3600)
         minutes = rem // 60
 
@@ -122,7 +189,7 @@ def print_summary(runs_path, model_names):
 
         print("FINAL VALUES")
         print(f"{'':8s} TRAIN      VALID")
-        print(f"Loss    {df['train_epoch_loss'].iloc[-1]:.3f}     {df['val_epoch_loss'].iloc[-1]:.3f}")
+        print(f"Loss    {df['train_loss'].iloc[-1]:.3f}     {df['val_loss'].iloc[-1]:.3f}")
         print(f"IoU     {df['train_iou'].iloc[-1]:.3f}     {df['val_iou'].iloc[-1]:.3f}")
         print(f"Prec    {df['train_precision'].iloc[-1]:.3f}     {df['val_precision'].iloc[-1]:.3f}")
         print(f"Recall  {df['train_recall'].iloc[-1]:.3f}     {df['val_recall'].iloc[-1]:.3f}")
