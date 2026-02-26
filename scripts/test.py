@@ -20,7 +20,7 @@ def parse_args():
 
     parser.add_argument("--dataset_root", type=str, required=True)
     parser.add_argument("--eval_dataset", type=str, required=True)
-    parser.add_argument("--tile_size", type=int, default=256)
+    parser.add_argument("--tile_size", type=str, default="tiles")
     parser.add_argument("--split", type=str, default="test")
 
     parser.add_argument("--runs_root", type=str, required=True)
@@ -134,8 +134,8 @@ def main():
     dataset_root = Path(args.dataset_root)
     runs_root = Path(args.runs_root)
 
-    image_dir = dataset_root / args.eval_dataset / f"tiles_{args.tile_size}" / args.split / "images"
-    gt_dir = dataset_root / args.eval_dataset / f"tiles_{args.tile_size}" / args.split / "gt"
+    image_dir = dataset_root / args.eval_dataset / args.tile_size / args.split / "images"
+    gt_dir = dataset_root / args.eval_dataset / args.tile_size / args.split / "gt"
 
     if not image_dir.exists():
         raise ValueError(f"Images directory not found: {image_dir}")
