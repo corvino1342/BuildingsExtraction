@@ -6,6 +6,7 @@ import numpy as np
 from PIL import Image
 from torchvision import transforms
 import matplotlib.pyplot as plt
+from matplotlib import patches
 
 from src.models.unet import UNet, UNetL, UNetLL
 from src.models.deeplabv3 import DeepLabV3
@@ -23,6 +24,8 @@ def parse_args():
     parser.add_argument("--tile_size", type=str, default="tiles")
     parser.add_argument("--split", type=str, default="test")
 
+
+    parser.add_argument("--pred_only", action="store_true", help="Save only the predicted masks (with no overlay or three-plot)")
     parser.add_argument("--runs_root", type=str, required=True)
     parser.add_argument("--runs", nargs="+", required=True,
                         help="Format: TRAIN_DATASET/MODEL_NAME")
@@ -71,22 +74,36 @@ def save_overlay(out_path, image, pred_mask, true_mask, title):
 
     overlay = np.zeros((img_np.shape[0], img_np.shape[1], 4), dtype=np.float32)
 
+    legend_elements = []
+
     if gt is not None:
         tp = np.logical_and(pred, gt)
         fp = np.logical_and(pred, ~gt)
         fn = np.logical_and(~pred, gt)
 
-        overlay[tp] = [0, 1, 0, 0.4]
-        overlay[fp] = [0, 0, 1, 0.4]
-        overlay[fn] = [1, 0, 0, 0.4]
+        overlay[tp] = [0, 1, 0, 0.4]   # Green
+        overlay[fp] = [0, 0, 1, 0.4]   # Blue
+        overlay[fn] = [1, 0, 0, 0.4]   # Red
+
+        legend_elements = [
+            patches.Patch(facecolor='green', label='True Positive'),
+            patches.Patch(facecolor='blue', label='False Positive'),
+            patches.Patch(facecolor='red', label='False Negative'),
+        ]
     else:
         overlay[pred] = [1, 0, 0, 0.4]
+        legend_elements = [
+            patches.Patch(facecolor='red', label='Prediction'),
+        ]
 
     fig, ax = plt.subplots(figsize=(8, 8))
     ax.imshow(img_np)
     ax.imshow(overlay)
     ax.set_title(title)
     ax.axis("off")
+
+    ax.legend(handles=legend_elements, loc="upper left", fontsize=10)
+
     plt.savefig(out_path)
     plt.close()
     
@@ -117,6 +134,19 @@ def save_three_plot(out_path, model_title, image, pred_mask, true_mask):
         axes[2].set_title("Prediction vs Ground Truth", fontsize=14)
         axes[2].axis("off")
 
+        legend_elements = [
+            patches.Patch(color='darkblue', label='Ground Truth'),
+            patches.Patch(color='darkred', label='Prediction'),
+        ]
+
+        axes[2].legend(
+            handles=legend_elements,
+            loc='upper left',
+            bbox_to_anchor=(1.05, 1),
+            borderaxespad=0,
+            fontsize=10
+        )
+
     plt.savefig(out_path)
     plt.close()
 
@@ -141,11 +171,31 @@ def main():
         raise ValueError(f"Images directory not found: {image_dir}")
 
     if args.all_images:
-        image_paths = sorted(image_dir.glob("*"))
+        image_paths = sorted(
+            [p for p in image_dir.iterdir()
+             if p.suffix.lower() in SUPPORTED_EXTENSIONS])
     else:
         if not args.images:
             raise ValueError("Use --all_images or provide --images")
-        image_paths = [image_dir / f"{name}.tif" for name in args.images]
+        image_paths = []
+
+    for name in args.images:
+        found = False
+        for ext in SUPPORTED_EXTENSIONS:
+            candidate = image_dir / f"{name}{ext}"
+            if candidate.exists():
+                image_paths.append(candidate)
+                found = True
+                break
+            # also check uppercase extension
+            candidate_upper = image_dir / f"{name}{ext.upper()}"
+            if candidate_upper.exists():
+                image_paths.append(candidate_upper)
+                found = True
+                break
+
+        if not found:
+            raise FileNotFoundError(f"No file found for {name} with supported extensions")
 
     print(f"\nEvaluating on: {args.eval_dataset} ({args.split})")
     print(f"Images: {len(image_paths)}")
@@ -180,8 +230,20 @@ def main():
         image = Image.open(img_path).convert("RGB")
         image_name = img_path.stem
 
-        gt_path = gt_dir / img_path.name
-        true_mask = Image.open(gt_path).convert("L") if gt_path.exists() else None
+        gt_path = None
+
+        for ext in SUPPORTED_EXTENSIONS:
+            candidate = gt_dir / f"{img_path.stem}{ext}"
+            if candidate.exists():
+                gt_path = candidate
+                break
+
+            candidate_upper = gt_dir / f"{img_path.stem}{ext.upper()}"
+            if candidate_upper.exists():
+                gt_path = candidate_upper
+                break
+
+        true_mask = Image.open(gt_path).convert("L") if gt_path else None
 
         input_tensor = transform(image).unsqueeze(0).to(device)
 
@@ -210,26 +272,28 @@ def main():
 
             save_mask(result_dir, image_name, pred_np)
 
-            save_overlay(
-                result_dir / "overlay" / f"{image_name}.tif",
-                image,
-                pred_np,
-                gt_np,
-                f"{model_name} | trained on {train_dataset}"
-            )
+            if not args.pred_only:
             
-            save_three_plot(
-                result_dir / "threeplot" / f"{image_name}.tif",
-                f"{model_name} | trained on {train_dataset}",
-                image,
-                pred_np,
-                gt_np
-            )
+                save_overlay(
+                    result_dir / "overlay" / f"{image_name}.tif",
+                    image,
+                    pred_np,
+                    gt_np,
+                    f"{model_name} | trained on {train_dataset}"
+                )
+            
+                save_three_plot(
+                    result_dir / "threeplot" / f"{image_name}.tif",
+                    f"{model_name} | trained on {train_dataset}",
+                    image,
+                    pred_np,
+                    gt_np
+                )
 
         print(f"Processed {image_name}")
 
     print(f"\nTotal inference time: {time.time() - total_start:.2f}s")
-
+SUPPORTED_EXTENSIONS = {".tif", ".tiff", ".png", ".jpg", ".jpeg"}
 
 if __name__ == "__main__":
     main()
