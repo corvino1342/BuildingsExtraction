@@ -1,207 +1,39 @@
-from matplotlib.pyplot import title
-from torchvision import transforms
-from PIL import Image
-import matplotlib.pyplot as plt
-from matplotlib import colors
-from matplotlib import patches
-
-import os
-import time
 import argparse
+import time
+from pathlib import Path
 import torch
 import numpy as np
+from PIL import Image
+from torchvision import transforms
+import matplotlib.pyplot as plt
 
-from unet import UNet, UNetL, UNetLL
-
-# python test.py   --dataset_path /mnt/nas151/sar/Footprint/data/  --train_dataset InriaBuildingDataset --test_dataset InriaBuildingDataset  --tile_size 256   --split test   --models unetLL_tiles_WBCEplusDL_n56000_dim256x256_bs32  --images austin34_27 chicago13_77 kitsap16_47   --device cuda
-
-
-def MaskPredict(base_out, model_name, image_name, pred_mask, ref_mask):
-    """
-    Save predicted mask with same size, format, and aspect as reference mask.
-    """
-    # Ensure binary mask → uint8 (0 or 255)
-    pred_mask_uint8 = (pred_mask > 0).astype(np.uint8) * 255
-
-    # Create PIL image
-    pred_img = Image.fromarray(pred_mask_uint8, mode="L")
-
-    # Safety check: force same size as reference
-    if pred_img.size != ref_mask.size:
-        pred_img = pred_img.resize(ref_mask.size, resample=Image.NEAREST)
-
-
-    save_path = (
-        f"{base_out}/predict/{image_name}.tif"
-    )
-
-    pred_img.save(save_path)
-
-def ShortModelName(model_name):
-    """
-    Create a compact, human-readable model identifier for plots.
-    Example:
-    unet_IAD_WBCE_lr0p0001_n28000_dim256x256_bs32
-    -> UNet | IAD | WBCE | 1e-04 | 256 | bs32
-    """
-    parts = model_name.split('_')
-
-    arch = parts[0].upper() if parts else "MODEL"
-
-    dt = "IAD" if "IAD" in parts else "MBD" if "MBD" in parts else "DATASET"
-
-    loss = "WBCE" if "WBCE" in parts else "BCE" if "BCE" in parts else "WBCE+Dice" if "WBCEplusDL" in parts else "BCE+Dice" if "BCEplusDL" in parts else "LOSS"
-
-    lr_part = next((p for p in parts if p.startswith("lr")), None)
-
-    if lr_part is None:
-        lr = "lr_var"
-    else:
-        lr_raw = lr_part[2:]  # strip 'lr'
-
-        if 'e' in lr_raw:
-            # already in scientific notation
-            lr = lr_raw
-        elif 'p' in lr_raw:
-            # convert 0p0001 -> 1e-04
-            value = float(lr_raw.replace('p', '.'))
-            lr = f"{value:.0e}"
-
-    dim = next((p.replace("dim", "") for p in parts if p.startswith("dim")), "dim?")
-    dim = dim.split('x')[0]  # keep only one spatial dimension
-
-    bs = next((p for p in parts if p.startswith("bs")), "bs?")
-
-    return f"{arch} | {dt} | {loss} | {lr} | {dim} | {bs}"
-# === Utility: Visualize predicted building mask overlay with confusion colors ===
-def Overlay(base_out, model_name, image, image_name, pred_mask, true_mask, alpha=0.4):
-    """
-    Overlay predicted building mask and ground truth on the original image.
-    Highlights:
-        - True Positive (TP): Green (correctly predicted building pixels)
-        - False Positive (FP): Blue (predicted building, but not in ground truth)
-        - False Negative (FN): Red (missed building pixels)
-        - True Negative (TN): Transparent (optional, background)
-    Args:
-        image: PIL.Image (RGB)
-        pred_mask: numpy array, shape (H,W), binary (0/1 or bool)
-        true_mask: numpy array, shape (H,W), binary (0/1 or bool)
-        alpha: float, overlay transparency
-    """
-    if true_mask is not None:
-        img_np = np.array(image)
-        pred = pred_mask.astype(bool)
-        gt = true_mask.astype(bool)
-
-        # Confusion masks
-        tp = np.logical_and(pred, gt)
-        fp = np.logical_and(pred, np.logical_not(gt))
-        fn = np.logical_and(np.logical_not(pred), gt)
-        tn = np.logical_and(np.logical_not(pred), np.logical_not(gt))
-
-        # RGBA overlay
-        overlay = np.zeros((img_np.shape[0], img_np.shape[1], 4), dtype=np.float32)
-        overlay[tp] = [0.0, 1.0, 0.0, alpha]   # Green
-        overlay[fp] = [0.0, 0.0, 1.0, alpha]   # Blue
-        overlay[fn] = [1.0, 0.0, 0.0, alpha]   # Red
-        overlay[tn] = [0.0, 0.0, 0.0, 0.0]     # Transparent
-
-        fig, ax = plt.subplots(1, 1, figsize=(8, 8))
-        ax.imshow(img_np)
-        ax.imshow(overlay)
-        ax.set_title(f"{ShortModelName(model_name)}", fontsize=16)
-        ax.axis("off")
-
-        legend_elements = [
-            patches.Patch(facecolor='green', label='True Positive'),
-            patches.Patch(facecolor='blue', label='False Positive'),
-            patches.Patch(facecolor='red', label='False Negative'),
-        ]
-        ax.legend(handles=legend_elements, loc='upper left', fontsize=12)
-
-        plt.savefig(f'{base_out}/overlay/{image_name}.tif')
-        #plt.show()
-        plt.close()
-
-def ThreePlot(base_out, model_name, image, image_name, pred_mask, true_mask):
-    if true_mask is None:
-        ncols = 2
-    else:
-        ncols = 3
-    fig, axes = plt.subplots(1, ncols, figsize=(18, 6), constrained_layout=True)
-
-    # --- 1. Input Image ---
-    axes[0].imshow(image)
-    axes[0].set_title("Input Image", fontsize=16)
-    axes[0].axis("off")
-
-    # --- 2. Input + Predicted Mask Overlay ---
-    axes[1].imshow(image)
-    axes[1].imshow(pred_mask, cmap='jet', alpha=0.5)
-    axes[1].contour(pred_mask, colors='white', linewidths=0.5)
-    axes[1].set_title(f"{ShortModelName(model_name)}\nInput + Predicted Mask", fontsize=16)
-    axes[1].axis("off")
-
-    if true_mask is not None:
-        # --- 3. Predicted vs True Mask Overlay ---
-        axes[2].imshow(image, alpha=0.8)  # base image
-
-        # Overlay "true" mask in green, semi-transparent
-        axes[2].imshow(true_mask, cmap='Blues', alpha=0.7)
-
-        # Overlay predicted mask in red, semi-transparent
-        axes[2].imshow(pred_mask, cmap='Reds', alpha=0.5)
-
-        axes[2].set_title("Predicted vs True Mask Overlay", fontsize=16)
-        axes[2].axis("off")
-
-        # Optional legend outside the plot for reference
-        legend_elements = [
-            patches.Patch(color='darkblue', label='Mask (Reference)'),
-            patches.Patch(color='darkred', label='Prediction'),
-        ]
-        axes[2].legend(
-            handles=legend_elements,
-            loc='upper left',
-            bbox_to_anchor=(1.05, 1),
-            borderaxespad=0,
-            fontsize=12
-        )
-
-    plt.savefig(f'{base_out}/threeplot/{image_name}.tif')
-    #plt.show()
-    plt.close()
-
-
+from src.models.unet import UNet, UNetL, UNetLL
+from src.models.deeplabv3 import DeepLabV3
 
 
 # --------------------------------------------------
 # CLI
 # --------------------------------------------------
+
 def parse_args():
-    parser = argparse.ArgumentParser("Building footprint inference")
+    parser = argparse.ArgumentParser("Flexible cross-dataset inference")
 
-    parser.add_argument("--dataset_path", type=str, required=True)
-
-    parser.add_argument("--train_dataset", type=str, required=True,
-                        help="Dataset used to train the model")
-
-    parser.add_argument("--test_dataset", type=str, required=True,
-                        help="Dataset used for inference")
-
+    parser.add_argument("--dataset_root", type=str, required=True)
+    parser.add_argument("--eval_dataset", type=str, required=True)
     parser.add_argument("--tile_size", type=int, default=256)
     parser.add_argument("--split", type=str, default="test")
 
-    parser.add_argument("--models", nargs="+", required=True,
-                        help="List of model run names")
+    parser.add_argument("--runs_root", type=str, required=True)
+    parser.add_argument("--runs", nargs="+", required=True,
+                        help="Format: TRAIN_DATASET/MODEL_NAME")
 
-    parser.add_argument("--images", nargs="+", required=True,
-                        help="Image base names without extension")
-
-    parser.add_argument("--device", type=str, default="cuda",
-                        choices=["cuda", "cpu", "mps"])
+    parser.add_argument("--all_images", action="store_true")
+    parser.add_argument("--images", nargs="+",
+                        help="Optional specific image names (without extension)")
 
     parser.add_argument("--threshold", type=float, default=0.5)
+    parser.add_argument("--device", type=str, default="cuda",
+                        choices=["cuda", "cpu", "mps"])
 
     return parser.parse_args()
 
@@ -209,6 +41,7 @@ def parse_args():
 # --------------------------------------------------
 # Model factory
 # --------------------------------------------------
+
 def build_model(model_name):
     if model_name.startswith("unetLL"):
         return UNetLL(3, 1)
@@ -216,12 +49,81 @@ def build_model(model_name):
         return UNetL(3, 1)
     if model_name.startswith("unet"):
         return UNet(3, 1)
+    if model_name.startswith("deeplabv3"):
+        return DeepLabV3(num_classes=1)
     raise ValueError(f"Unknown model type: {model_name}")
 
 
 # --------------------------------------------------
+# Utilities
+# --------------------------------------------------
+
+def save_mask(out_dir, image_name, pred_mask):
+    pred_uint8 = (pred_mask > 0).astype(np.uint8) * 255
+    pred_img = Image.fromarray(pred_uint8, mode="L")
+    pred_img.save(out_dir / "predict" / f"{image_name}.tif")
+
+
+def save_overlay(out_path, image, pred_mask, true_mask, title):
+    img_np = np.array(image)
+    pred = pred_mask.astype(bool)
+    gt = true_mask.astype(bool) if true_mask is not None else None
+
+    overlay = np.zeros((img_np.shape[0], img_np.shape[1], 4), dtype=np.float32)
+
+    if gt is not None:
+        tp = np.logical_and(pred, gt)
+        fp = np.logical_and(pred, ~gt)
+        fn = np.logical_and(~pred, gt)
+
+        overlay[tp] = [0, 1, 0, 0.4]
+        overlay[fp] = [0, 0, 1, 0.4]
+        overlay[fn] = [1, 0, 0, 0.4]
+    else:
+        overlay[pred] = [1, 0, 0, 0.4]
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+    ax.imshow(img_np)
+    ax.imshow(overlay)
+    ax.set_title(title)
+    ax.axis("off")
+    plt.savefig(out_path)
+    plt.close()
+    
+def save_three_plot(out_path, model_title, image, pred_mask, true_mask):
+    if true_mask is None:
+        ncols = 2
+    else:
+        ncols = 3
+
+    fig, axes = plt.subplots(1, ncols, figsize=(18, 6), constrained_layout=True)
+
+    # 1. Input image
+    axes[0].imshow(image)
+    axes[0].set_title("Input Image", fontsize=14)
+    axes[0].axis("off")
+
+    # 2. Input + predicted mask
+    axes[1].imshow(image)
+    axes[1].imshow(pred_mask, cmap="jet", alpha=0.5)
+    axes[1].contour(pred_mask, colors="white", linewidths=0.5)
+    axes[1].set_title(f"{model_title}\nPrediction", fontsize=14)
+    axes[1].axis("off")
+
+    if true_mask is not None:
+        axes[2].imshow(image, alpha=0.8)
+        axes[2].imshow(true_mask, cmap="Blues", alpha=0.7)
+        axes[2].imshow(pred_mask, cmap="Reds", alpha=0.5)
+        axes[2].set_title("Prediction vs Ground Truth", fontsize=14)
+        axes[2].axis("off")
+
+    plt.savefig(out_path)
+    plt.close()
+
+# --------------------------------------------------
 # Main
 # --------------------------------------------------
+
 def main():
     args = parse_args()
 
@@ -229,91 +131,105 @@ def main():
         args.device if torch.cuda.is_available() or args.device != "cuda" else "cpu"
     )
 
-    print(f"\nDevice: {device}")
-    print(f"Models: {args.models}")
-    print(f"Images: {args.images}\n")
+    dataset_root = Path(args.dataset_root)
+    runs_root = Path(args.runs_root)
+
+    image_dir = dataset_root / args.eval_dataset / f"tiles_{args.tile_size}" / args.split / "images"
+    gt_dir = dataset_root / args.eval_dataset / f"tiles_{args.tile_size}" / args.split / "gt"
+
+    if not image_dir.exists():
+        raise ValueError(f"Images directory not found: {image_dir}")
+
+    if args.all_images:
+        image_paths = sorted(image_dir.glob("*"))
+    else:
+        if not args.images:
+            raise ValueError("Use --all_images or provide --images")
+        image_paths = [image_dir / f"{name}.tif" for name in args.images]
+
+    print(f"\nEvaluating on: {args.eval_dataset} ({args.split})")
+    print(f"Images: {len(image_paths)}")
+    print(f"Device: {device}\n")
 
     transform = transforms.ToTensor()
 
-    # --------------------------------------------------
-    # Load models ONCE
-    # --------------------------------------------------
     models = {}
-    for name in args.models:
-        start = time.time()
 
-        model = build_model(name).to(device)
-        ckpt = f"/home/antoniocorvino/Projects/BuildingsExtraction/runs/{args.train_dataset}/{name}/best_model.pth"
+    # Load models
+    for run_id in args.runs:
+        train_dataset, model_name = run_id.split("/")
 
-        model.load_state_dict(
-            torch.load(ckpt, map_location=device),
-            strict=False
-        )
+        model = build_model(model_name).to(device)
+
+        ckpt_path = runs_root / train_dataset / model_name / "best_model.pth"
+
+        if not ckpt_path.exists():
+            raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
+
+        model.load_state_dict(torch.load(ckpt_path, map_location=device), strict=False)
         model.eval()
 
-        models[name] = model
-        print(f"Loaded {name} in {(time.time()-start):.2f}s")
+        models[run_id] = model
+        print(f"Loaded {run_id}")
 
-    # --------------------------------------------------
-    # Inference loop
-    # --------------------------------------------------
     total_start = time.time()
 
-    for image_name in args.images:
-
-        img_path = (
-            f"{args.dataset_path}/{args.test_dataset}/tiles_{args.tile_size}/"
-            f"{args.split}/images/{image_name}.tif"
-        )
-        mask_path = (
-            f"{args.dataset_path}/{args.test_dataset}/tiles_{args.tile_size}/"
-            f"{args.split}/gt/{image_name}.tif"
-        )
+    # Inference loop
+    for img_path in image_paths:
 
         image = Image.open(img_path).convert("RGB")
-        true_mask = Image.open(mask_path).convert("L") if os.path.exists(mask_path) else None
+        image_name = img_path.stem
+
+        gt_path = gt_dir / img_path.name
+        true_mask = Image.open(gt_path).convert("L") if gt_path.exists() else None
 
         input_tensor = transform(image).unsqueeze(0).to(device)
 
-        print(f"\nImage: {image_name}")
-        print(f"Input shape: {input_tensor.shape}")
+        for run_id, model in models.items():
 
-        for model_name, model in models.items():
-            base_out = (
-                f"/home/antoniocorvino/Projects/BuildingsExtraction/runs/{args.test_dataset}/{model_name}/trained_on_{args.train_dataset}/"
+            train_dataset, model_name = run_id.split("/")
+
+            result_dir = (
+                Path("experiments")
+                / f"eval_on_{args.eval_dataset}"
+                / f"split_{args.split}"
+                / f"{model_name}_trained_on_{train_dataset}"
             )
-            os.makedirs(f"{base_out}/predict", exist_ok=True)
-            os.makedirs(f"{base_out}/overlay", exist_ok=True)
-            os.makedirs(f"{base_out}/threeplot", exist_ok=True)
 
-            start = time.time()
+            (result_dir / "predict").mkdir(parents=True, exist_ok=True)
+            (result_dir / "overlay").mkdir(parents=True, exist_ok=True)
+            (result_dir / "threeplot").mkdir(parents=True, exist_ok=True)
+
             with torch.no_grad():
                 logits = model(input_tensor)
                 prob = torch.sigmoid(logits)
                 pred = (prob > args.threshold).float()
 
-            infer_time = time.time() - start
-
             pred_np = pred.squeeze().cpu().numpy()
             gt_np = np.array(true_mask) > 0 if true_mask else None
 
+            save_mask(result_dir, image_name, pred_np)
 
-            MaskPredict(base_out, model_name, image_name, pred_np, true_mask)
-            Overlay(base_out, model_name, image, image_name, pred_np, gt_np)
-            ThreePlot(base_out, model_name, image, image_name, pred_np, gt_np)
-
-            print(
-                f"  {model_name:<40} "
-                f"Inference: {infer_time:.3f}s | "
-                f"Foreground ratio: {pred_np.mean():.3f}"
+            save_overlay(
+                result_dir / "overlay" / f"{image_name}.tif",
+                image,
+                pred_np,
+                gt_np,
+                f"{model_name} | trained on {train_dataset}"
+            )
+            
+            save_three_plot(
+                result_dir / "threeplot" / f"{image_name}.tif",
+                f"{model_name} | trained on {train_dataset}",
+                image,
+                pred_np,
+                gt_np
             )
 
-    print(f"\nTotal inference time: {(time.time()-total_start):.2f}s")
+        print(f"Processed {image_name}")
+
+    print(f"\nTotal inference time: {time.time() - total_start:.2f}s")
 
 
 if __name__ == "__main__":
     main()
-
-
-
-

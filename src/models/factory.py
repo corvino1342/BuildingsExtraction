@@ -1,5 +1,5 @@
 from .unet import UNet, UNetL, UNetLL
-#from .deeplab import DeepLabV3Plus
+from .deeplab import DeepLabV3
 
 def build_model(name, in_channels=3, num_classes=1):
 
@@ -14,7 +14,7 @@ def build_model(name, in_channels=3, num_classes=1):
     if name == "unetll":
         return UNetLL(in_channels, num_classes)
 
-    #if name == "deeplabv3+":
-        #return DeepLabV3Plus(in_channels, num_classes)
+    if name == "deeplabv3":
+        return DeepLabV3(in_channels, num_classes)
 
     raise ValueError(f"Unknown model: {name}")
