@@ -13,6 +13,9 @@ from src.data.dataset import MyDataset
 from src.evaluation.metrics import iou_score, precision_score, recall_score, MetricsLogger
 from src.training.losses import build_loss
 from src.training.trainer import Trainer
+from src.models.factory import build_model
+import json
+from datetime import datetime
 
 # Run from project root:
 # python -m scripts.train --dataset_path /mnt/nas151/sar/Footprint/datasets --dataset_name WHUBuildingDataset --mode tiles --fixed_size --tile_size 256 --batch_size 32 --epochs 30 --lr 0.001 --arch unetLL --loss wbce --output_dir /home/antoniocorvino/Projects/BuildingsExtraction/runs/
@@ -29,7 +32,7 @@ def parse_args():
 
     parser.add_argument("--dataset_path", type=str, required=True)
     parser.add_argument("--dataset_name", type=str, default="WHUBuildingDataset")
-    parser.add_argument("--mode", type=str, choices=["tiles", "instances"], default="tiles") #if instances set batch_size to 1. UNet cannot handle batch with different tile size
+    #parser.add_argument("--mode", type=str, choices=["tiles", "instances"], default="tiles") #if instances set batch_size to 1. UNet cannot handle batch with different tile size
 
     parser.add_argument("--fixed_size", action="store_true",  help="Enforce fixed tile size (recommended for semantic tiles)")
 
@@ -74,16 +77,22 @@ def main():
     transform = transforms.ToTensor()
 
     train_ds = MyDataset(
-        f"{args.dataset_path}/{args.dataset_name}/{args.mode}/train/images",
-        f"{args.dataset_path}/{args.dataset_name}/{args.mode}/train/gt",
+        f"{args.dataset_path}/{args.dataset_name}/tiles_{args.tile_size}/train/images",
+        f"{args.dataset_path}/{args.dataset_name}/tiles_{args.tile_size}/train/gt",
         transform=transform
     )
 
     val_ds = MyDataset(
-        f"{args.dataset_path}/{args.dataset_name}/{args.mode}/val/images",
-        f"{args.dataset_path}/{args.dataset_name}/{args.mode}/val/gt",
+        f"{args.dataset_path}/{args.dataset_name}/tiles_{args.tile_size}/val/images",
+        f"{args.dataset_path}/{args.dataset_name}/tiles_{args.tile_size}/val/gt",
         transform=transform
     )
+
+    n_train = len(train_ds)
+    n_val = len(val_ds)
+
+    print(f"Training tiles: {n_train}")
+    print(f"Validation tiles: {n_val}")
 
     train_loader = DataLoader(
         train_ds,
@@ -101,7 +110,6 @@ def main():
         pin_memory=True,
         persistent_workers=args.num_workers > 0    )
 
-    from src.models.factory import build_model
     model = build_model(args.arch).to(device)
 
     bce, dice = build_loss(args.loss, train_ds, device)
@@ -109,7 +117,7 @@ def main():
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     run_name = (
-        f"{args.arch}_{args.mode}_{args.loss}"
+        f"{args.arch}_{args.loss}"
         f"_dim{args.tile_size}"
         f"_n{len(train_loader.dataset)}"
         f"_bs{args.batch_size}"
@@ -118,7 +126,24 @@ def main():
     out_dir_ = os.path.join(args.output_dir, args.dataset_name)
     out_dir = os.path.join(out_dir_, run_name)
     os.makedirs(out_dir, exist_ok=True)
-
+    config_dict = {
+        "timestamp": datetime.now().isoformat(),
+        "dataset_name": args.dataset_name,
+        "tile_size": args.tile_size,
+        "batch_size": args.batch_size,
+        "epochs": args.epochs,
+        "learning_rate": args.lr,
+        "architecture": args.arch,
+        "loss": args.loss,
+        "num_workers": args.num_workers,
+        "seed": args.seed,
+        "n_train_tiles": n_train,
+        "n_val_tiles": n_val,
+        "device": str(device)
+    }
+    
+    with open(os.path.join(out_dir, "config.json"), "w") as f:
+        json.dump(config_dict, f, indent=4)
     logger = MetricsLogger(out_dir)
 
     best_val = float("inf")

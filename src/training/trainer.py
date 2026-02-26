@@ -41,9 +41,9 @@ class Trainer:
 
             with torch.no_grad():
                 loss_sum += loss.item()
-                iou_sum += iou_score(out, masks)
-                p_sum += precision_score(out, masks)
-                r_sum += recall_score(out, masks)
+                iou_sum += iou_score(out, masks).item()
+                p_sum += precision_score(out, masks).item()
+                r_sum += recall_score(out, masks).item()
 
         n = len(loader)
 
@@ -78,9 +78,9 @@ class Trainer:
                 loss += self.dice(out, masks)
 
             loss_sum += loss.item()
-            iou_sum += iou_score(out, masks)
-            p_sum += precision_score(out, masks)
-            r_sum += recall_score(out, masks)
+            iou_sum += iou_score(out, masks).item()
+            p_sum += precision_score(out, masks).item()
+            r_sum += recall_score(out, masks).item()
 
         n = len(loader)
 
