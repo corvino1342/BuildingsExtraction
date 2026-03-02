@@ -1,5 +1,5 @@
 from .unet import UNet, UNetL, UNetLL
-from .deeplab import DeepLabV3
+from .deeplabv3 import DeepLabV3
 
 def build_model(name, in_channels=3, num_classes=1):
 
