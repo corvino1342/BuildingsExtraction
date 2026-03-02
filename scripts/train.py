@@ -41,9 +41,8 @@ def parse_args():
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--lr", type=float, default=1e-3)
 
-    parser.add_argument("--arch", type=str, choices=["unet", "unetL", "unetLL"], default="unet")
-    parser.add_argument("--loss", type=str, choices=["bce", "wbce", "wbce+dice"], default="wbce")
-
+    parser.add_argument("--arch", type=str, choices=["unet", "unetL", "unetLL"], default="unetLL")
+    parser.add_argument("--loss", type=str, choices=["bce", "wbce", "wbce_dice", "tversky", "focal_tversky"], default="bce")
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output_dir", type=str, default="./runs")
@@ -152,8 +151,7 @@ def main():
         model=model,
         optimizer=optimizer,
         scaler=scaler,
-        bce=bce,
-        dice=dice,
+        criterion=criterion,
         device=device,
         use_amp=(device.type == "cuda")
     )
