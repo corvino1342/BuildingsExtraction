@@ -4,12 +4,11 @@ from src.evaluation.metrics import iou_score, precision_score, recall_score
 
 class Trainer:
 
-    def __init__(self, model, optimizer, scaler, bce, dice, device, use_amp=True):
+    def __init__(self, model, optimizer, scaler, criterion, device, use_amp=True):
         self.model = model
         self.optimizer = optimizer
         self.scaler = scaler
-        self.bce = bce
-        self.dice = dice
+        self.criterion = criterion
         self.device = device
         self.use_amp = use_amp
 
@@ -30,10 +29,7 @@ class Trainer:
             with torch.cuda.amp.autocast(enabled=self.use_amp):
 
                 out = self.model(imgs)
-                loss = self.bce(out, masks)
-
-                if self.dice:
-                    loss += self.dice(out, masks)
+                loss = self.criterion(out, masks.float())
 
             self.scaler.scale(loss).backward()
             self.scaler.step(self.optimizer)
@@ -72,10 +68,8 @@ class Trainer:
             masks = masks.to(self.device).float()
 
             out = self.model(imgs)
-            loss = self.bce(out, masks)
+            loss = self.criterion(out, masks.float())
 
-            if self.dice:
-                loss += self.dice(out, masks)
 
             loss_sum += loss.item()
             iou_sum += iou_score(out, masks).item()

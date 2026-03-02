@@ -112,7 +112,7 @@ def main():
 
     model = build_model(args.arch).to(device)
 
-    bce, dice = build_loss(args.loss, train_ds, device)
+    criterion = build_loss(args.loss, train_ds, device)
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
