@@ -7,8 +7,7 @@ import csv
 from tqdm import tqdm
 import numpy as np
 
-#python buildings_dataset_creation.py --dataset_name  WHUBuildingDataset --dataset_path /mnt/nas151/sar/Footprint/data
-# --tile_size 128 --stride --maps_to_use -1 --splits train --skip_empty --fg_threshold --overwrite --save_stats
+#python -m src.data.tiling --dataset_name  WHUBuildingDataset --dataset_path /mnt/nas151/sar/Footprint/dataset --tile_size 128 --stride 128 --maps_to_use -1 --splits train --overwrite --save_stats
 # --------------------------------------------------
 # Argument parser
 # --------------------------------------------------
@@ -80,7 +79,7 @@ def tiles_creation(args):
         image_names = sorted(
             os.path.splitext(f)[0]
             for f in os.listdir(image_dir)
-            if f.lower().endswith((".tif", ".tiff", ".png", ".jpg"))
+            if f.lower().endswith((".tif", ".tiff", ".png", ".jpg", ".TIF", ".TIFF"))
         )
 
         if args.maps_to_use > 0:
@@ -88,7 +87,7 @@ def tiles_creation(args):
 
         for name in tqdm(image_names, desc=f"Tiling {split}"):
 
-            img = Image.open(f"{image_dir}/{name}.TIF")
+            img = Image.open(f"{image_dir}/{name}.tif")
             if has_gt:
                 mask = Image.open(f"{gt_dir}/{name}.tif")
 
