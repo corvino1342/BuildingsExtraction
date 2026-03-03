@@ -4,6 +4,7 @@ ouputs/
 logs/
 checkpoints/
 predictions/
+experiments/
 
 # Ignore large files
 *.pth
