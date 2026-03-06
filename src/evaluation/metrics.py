@@ -26,9 +26,8 @@ class MetricsLogger:
             "epoch_time_sec"
         ]
 
-        if not os.path.exists(self.csv_path):
-            with open(self.csv_path, "w", newline="") as f:
-                csv.writer(f).writerow(self.header)
+        with open(self.csv_path, "w", newline="") as f:
+            csv.writer(f).writerow(self.header)
 
     def log(self, epoch, tr, va, epoch_time):
         row = [
