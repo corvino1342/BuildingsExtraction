@@ -6,6 +6,8 @@ import rasterio
 from tqdm import tqdm
 from src.models.unet import UNet, UNetL, UNetLL
 
+warnings.filterwarnings("ignore", category=NotGeoreferencedWarning)
+
 # Example usage from the shell:
 #
 # python scripts/infer_probability_maps.py \
@@ -75,8 +77,7 @@ def process_tile(tile_path, models, device):
     entropy_map = compute_entropy(mean_map)
     agreement_map = compute_agreement(preds)
 
-    return mean_map, std_map, entropy_map, agreement_map, profile
-
+    return preds, mean_map, std_map, entropy_map, agreement_map, profile
 
 def main(args):
 
@@ -96,8 +97,14 @@ def main(args):
     ensure_dirs(derived_root, splits, layers)
 
     models = [load_model(p, device) for p in model_paths]
+    # create directories for individual model predictions
+    model_names = [Path(m).stem for m in args.models]
 
     for split in splits:
+
+        for m in model_names:
+            (derived_root / split / m).mkdir(parents=True, exist_ok=True)
+
         images_dir = tiles_root / split / "images"
 
         tiles = sorted(images_dir.glob("*.tif"))
@@ -109,8 +116,17 @@ def main(args):
             if out_check.exists():
                 continue
 
-            mean_map, std_map, entropy_map, agreement_map, profile = process_tile(tile, models, device)
+            preds, mean_map, std_map, entropy_map, agreement_map, profile = process_tile(tile, models, device)
 
+            # save individual model predictions
+            for pred, model_name in zip(preds, model_names):
+                save_tif(
+                    derived_root / split / model_name / name,
+                    pred,
+                    profile
+                )
+
+            # save ensemble statistics
             save_tif(derived_root / split / "prob_mean" / name, mean_map, profile)
             save_tif(derived_root / split / "prob_std" / name, std_map, profile)
             save_tif(derived_root / split / "entropy" / name, entropy_map, profile)
