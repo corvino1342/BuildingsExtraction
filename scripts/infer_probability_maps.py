@@ -3,9 +3,20 @@ from pathlib import Path
 import numpy as np
 import torch
 import rasterio
+from tqdm import tqdm
 from src.models.unet import UNet, UNetL, UNetLL
 
-# python infer_probability_maps.py --dataset_root /mnt/nas151/sar/Footprint/datasets/WHUBuildingDataset --models model1.pth model2.pth model3.pth
+# Example usage from the shell:
+#
+# python scripts/infer_probability_maps.py \
+#   --dataset_root /mnt/nas151/sar/Footprint/datasets/WHUBuildingDataset/tiles_256 \
+#   --runs_root /home/antoniocorvino/Projects/BuildingsExtraction/runs/WHUBuildingDataset \
+#   --models unetLL_bce_dim256_n47088_bs32 unetLL_tversky_dim256_n47088_bs32 unetLL_focaltversky_dim256_n47088_bs32
+#
+# This will load each model from:
+#   runs_root/<model_name>/best_model.pth
+# and compute probability maps for all tiles in train/val/test.
+
 def load_model(model_path, device):
 
     model = UNetLL(n_channels=3, n_classes=1)   # create architecture
@@ -75,29 +86,35 @@ def main(args):
     tiles_root = dataset_root
     derived_root = dataset_root / "derived"
 
+    runs_root = Path(args.runs_root)
+
+    model_paths = [runs_root / m / "best_model.pth" for m in args.models]
+
     splits = ["train", "val", "test"]
     layers = ["prob_mean", "prob_std", "entropy", "agreement"]
 
     ensure_dirs(derived_root, splits, layers)
 
-    models = [load_model(p, device) for p in args.models]
-    
+    models = [load_model(p, device) for p in model_paths]
+
     for split in splits:
         images_dir = tiles_root / split / "images"
 
         tiles = sorted(images_dir.glob("*.tif"))
 
-        for tile in tiles:
-            mean_map, std_map, entropy_map, agreement_map, profile = process_tile(tile, models, device)
-
+        for tile in tqdm(tiles, desc=f"Processing {split}"):
             name = tile.name
+
+            out_check = derived_root / split / "prob_mean" / name
+            if out_check.exists():
+                continue
+
+            mean_map, std_map, entropy_map, agreement_map, profile = process_tile(tile, models, device)
 
             save_tif(derived_root / split / "prob_mean" / name, mean_map, profile)
             save_tif(derived_root / split / "prob_std" / name, std_map, profile)
             save_tif(derived_root / split / "entropy" / name, entropy_map, profile)
             save_tif(derived_root / split / "agreement" / name, agreement_map, profile)
-
-            print(f"Processed {tile}")
 
 
 if __name__ == "__main__":
@@ -111,10 +128,16 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--runs_root",
+        required=True,
+        help="Root folder containing training runs"
+    )
+
+    parser.add_argument(
         "--models",
         nargs="+",
         required=True,
-        help="Paths to trained models"
+        help="Model run directories (best_model.pth will be loaded automatically)"
     )
 
     args = parser.parse_args()
