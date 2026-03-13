@@ -6,8 +6,10 @@ import rasterio
 from tqdm import tqdm
 from src.models.unet import UNet, UNetL, UNetLL
 
-warnings.filterwarnings("ignore", category=NotGeoreferencedWarning)
+import warnings
+from rasterio.errors import NotGeoreferencedWarning
 
+warnings.filterwarnings("ignore", category=NotGeoreferencedWarning)
 # Example usage from the shell:
 #
 # python scripts/infer_probability_maps.py \
@@ -109,12 +111,14 @@ def main(args):
 
         tiles = sorted(images_dir.glob("*.tif"))
 
+        # optionally limit number of tiles for quick validation
+        if args.max_tiles is not None:
+            tiles = tiles[:args.max_tiles]
+
         for tile in tqdm(tiles, desc=f"Processing {split}"):
             name = tile.name
 
             out_check = derived_root / split / "prob_mean" / name
-            if out_check.exists():
-                continue
 
             preds, mean_map, std_map, entropy_map, agreement_map, profile = process_tile(tile, models, device)
 
@@ -155,7 +159,12 @@ if __name__ == "__main__":
         required=True,
         help="Model run directories (best_model.pth will be loaded automatically)"
     )
-
+    parser.add_argument(
+        "--max_tiles",
+        type=int,
+        default=None,
+        help="Process only the first N tiles of each split (useful for quick tests)"
+    )
     args = parser.parse_args()
 
     main(args)
