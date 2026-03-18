@@ -48,7 +48,54 @@ class TverskyLoss(nn.Module):
         )
 
         return 1 - tversky.mean()
+        
+# --------------------------------------------------
+# Focal loss
+# --------------------------------------------------
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=0.25, gamma=2.0, reduction="mean", eps=1e-6):
+        super().__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.reduction = reduction
+        self.eps = eps
 
+    def forward(self, logits, targets):
+        targets = targets.float()
+        probs = torch.sigmoid(logits)
+        p_t = targets * probs + (1 - targets) * (1 - probs)
+        alpha_t = targets * self.alpha + (1 - targets) * (1 - self.alpha)
+        loss = -alpha_t * (1 - p_t).pow(self.gamma) * torch.log(p_t + self.eps)
+        if self.reduction == "mean":
+            return loss.mean()
+        elif self.reduction == "sum":
+            return loss.sum()
+        return loss
+    
+# --------------------------------------------------
+# Dice BCE loss
+# --------------------------------------------------
+class DiceBCELoss(nn.Module):
+    def __init__(self, bce_weight=1.0, smooth=1.0):
+        super().__init__()
+        self.bce = nn.BCEWithLogitsLoss()
+        self.smooth = smooth
+        self.bce_weight = bce_weight
+
+    def forward(self, logits, targets):
+        bce_loss = self.bce(logits, targets.float())
+
+        probs = torch.sigmoid(logits)
+        probs = probs.view(probs.size(0), -1)
+        targets_flat = targets.view(targets.size(0), -1).float()
+        intersection = (probs * targets_flat).sum(dim=1)
+        dice = (2 * intersection + self.smooth) / (
+            probs.sum(dim=1) + targets_flat.sum(dim=1) + self.smooth
+        )
+        dice_loss = 1 - dice.mean()
+
+        return self.bce_weight * bce_loss + (1.0 - self.bce_weight) * dice_loss
+    
 # --------------------------------------------------
 # Focal Tversky loss
 # --------------------------------------------------
@@ -134,6 +181,9 @@ def build_loss(loss_name, train_dataset, device):
 
     elif loss_name == "focal_tversky":
         return FocalTverskyLoss(alpha=0.3, beta=0.7, gamma=2.0)
+    
+    elif loss_name == "focal":
+        return FocalLoss(alpha=0.25, gamma=2.0)
 
     else:
         raise ValueError(f"Unknown loss: {loss_name}")
