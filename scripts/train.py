@@ -18,8 +18,7 @@ import json
 from datetime import datetime
 
 # Run from project root:
-# python -m scripts.train --dataset_path /mnt/nas151/sar/Footprint/datasets --dataset_name WHUBuildingDataset --mode tiles --fixed_size --tile_size 256 --batch_size 32 --epochs 30 --lr 0.001 --arch unetLL --loss wbce --output_dir /home/antoniocorvino/Projects/BuildingsExtraction/runs/
-
+# python -m scripts.train --dataset_name WHUBuildingDataset --fixed_size --tile_size 256 --batch_size 32 --epochs 30 --lr 0.001 --arch unetLL --loss wbce --extra_channels prob_mean
 
 
 # --------------------------------------------------
@@ -30,9 +29,11 @@ from datetime import datetime
 def parse_args():
     parser = argparse.ArgumentParser("Building Footprint Training")
 
-    parser.add_argument("--dataset_path", type=str, required=True)
     parser.add_argument("--dataset_name", type=str, default="WHUBuildingDataset")
-    #parser.add_argument("--mode", type=str, choices=["tiles", "instances"], default="tiles") #if instances set batch_size to 1. UNet cannot handle batch with different tile size
+
+    parser.add_argument("--in_channels", type=int, default=3)
+    parser.add_argument("--extra_channels", type=str, nargs="*", default=[],
+                        help="Optional extra channels to append as additional input channels (same order and count as images)")
 
     parser.add_argument("--fixed_size", action="store_true",  help="Enforce fixed tile size (recommended for semantic tiles)")
 
@@ -45,7 +46,10 @@ def parse_args():
     parser.add_argument("--loss", type=str, choices=["bce", "wbce", "wbce_dice", "tversky", "focal_tversky"], default="bce")
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--output_dir", type=str, default="./runs")
+
+    # parser.add_argument("--dataset_path", type=str, required=True)
+    # parser.add_argument("--mode", type=str, choices=["tiles", "instances"], default="tiles") #if instances set batch_size to 1. UNet cannot handle batch with different tile size
+    # parser.add_argument("--output_dir", type=str, default="./runs")
 
     return parser.parse_args()
 # --------------------------------------------------
@@ -70,20 +74,40 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     use_amp = device.type == "cuda"
-    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+    scaler = torch.amp.GradScaler('cuda', enabled=use_amp)
+    dataset_path = "/mnt/nas151/sar/Footprint/datasets"
+    output_dir = "/home/antoniocorvino/Projects/BuildingsExtraction/runs"
+    extra_dirs = ""
 
 
     transform = transforms.ToTensor()
 
-    train_ds = MyDataset(
-        f"{args.dataset_path}/{args.dataset_name}/tiles_{args.tile_size}/train/images",
-        f"{args.dataset_path}/{args.dataset_name}/tiles_{args.tile_size}/train/gt",
+    train_extra_dirs = [
+        os.path.join(dataset_path, args.dataset_name, f"tiles_{args.tile_size}/derived/train/{p}")
+        for p in args.extra_channels
+    ]
+    val_extra_dirs = [
+        os.path.join(dataset_path, args.dataset_name, f"tiles_{args.tile_size}/derived/val/{p}")
+        for p in args.extra_channels
+    ]
+
+    # if user passes unknown in_channels, automatically compute from extras
+    auto_in_channels = 3 + len(train_extra_dirs)
+    if (args.in_channels != auto_in_channels):
+        print(f"Setting in_channels={auto_in_channels} (RGB + {len(train_extra_dirs)} extra tiles)")
+        args.in_channels = auto_in_channels
+
+    train_ds = MyDataset( 
+        f"{dataset_path}/{args.dataset_name}/tiles_{args.tile_size}/train/images",
+        f"{dataset_path}/{args.dataset_name}/tiles_{args.tile_size}/train/gt",
+        extra_dirs=train_extra_dirs,
         transform=transform
     )
 
     val_ds = MyDataset(
-        f"{args.dataset_path}/{args.dataset_name}/tiles_{args.tile_size}/val/images",
-        f"{args.dataset_path}/{args.dataset_name}/tiles_{args.tile_size}/val/gt",
+        f"{dataset_path}/{args.dataset_name}/tiles_{args.tile_size}/val/images",
+        f"{dataset_path}/{args.dataset_name}/tiles_{args.tile_size}/val/gt",
+        extra_dirs=val_extra_dirs,
         transform=transform
     )
 
@@ -109,8 +133,7 @@ def main():
         pin_memory=True,
         persistent_workers=args.num_workers > 0    )
 
-    model = build_model(args.arch).to(device)
-
+    model = build_model(args.arch, in_channels=args.in_channels).to(device)
     criterion = build_loss(args.loss, train_ds, device)
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
@@ -122,7 +145,7 @@ def main():
         f"_bs{args.batch_size}"
     )
 
-    out_dir_ = os.path.join(args.output_dir, args.dataset_name)
+    out_dir_ = os.path.join(output_dir, args.dataset_name)
     out_dir = os.path.join(out_dir_, run_name)
     os.makedirs(out_dir, exist_ok=True)
     config_dict = {
