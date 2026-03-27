@@ -70,11 +70,9 @@ def ensure_dirs(derived_root, splits, layers, model_names):
     """Create output directories for per-model and ensemble layers."""
     for split in splits:
         for mn in model_names:
-            os.makedirs(f"{derived_root}/{split}/{mn}", exist_ok=True)
-            # (f"{derived_root}/{split}/{mn}").mkdir(parents=True, exist_ok=True)
+            (derived_root / split / mn).mkdir(parents=True, exist_ok=True)
         for layer in layers:
-            os.makedirs(f"{derived_root}/{split}/{layer}", exist_ok=True)
-            # (f"{derived_root}/{split}/{layer}").mkdir(parents=True, exist_ok=True)
+            (derived_root / split / layer).mkdir(parents=True, exist_ok=True)
 
 
 def compute_entropy(p):
@@ -100,10 +98,11 @@ def compute_agreement(preds):
 def infer_model_split(model, model_name, split, dataset_root, derived_root, max_tiles=None):
     """Run inference for a single model on a given split."""
 
-    in_dir =f"{dataset_root}/{split}/images"
-    out_dir = f"{derived_root}/{split}/{model_name}"
+    in_dir = dataset_root / split / "images"
+    out_dir = derived_root / split / model_name
+    tiles = sorted(in_dir.glob("*.tif"))
 
-    tiles = sorted(Path(in_dir).glob("*.tif"))
+    
     if max_tiles is not None:
         tiles = tiles[:max_tiles]
 
@@ -118,13 +117,14 @@ def infer_model_split(model, model_name, split, dataset_root, derived_root, max_
 
         img_tensor = torch.from_numpy(img).unsqueeze(0)  # (1, C, H, W)
         pred = predict(model, img_tensor)  # (H, W)
-        save_tif(Path(out_dir) / tile.name, pred, profile)
+        save_tif(out_dir / tile.name, pred, profile)
 
 
 def compute_ensemble_split(model_names, split, dataset_root, derived_root, max_tiles=None):
     """Compute ensemble statistics (mean, std, entropy, agreement) for a given split."""
     in_dir = dataset_root / split / "images"
     tiles = sorted(in_dir.glob("*.tif"))
+    
     if max_tiles is not None:
         tiles = tiles[:max_tiles]
 
@@ -153,9 +153,9 @@ def compute_ensemble_split(model_names, split, dataset_root, derived_root, max_t
 def main(args):
     device = torch.device("cuda" if args.device == "cuda" and torch.cuda.is_available() else "cpu")
 
-    dataset_root = f"/mnt/nas151/sar/Footprint/datasets/{args.dataset_root}/{args.tile_size}"
-    derived_root = f"{dataset_root}/derived"
-    runs_root = f"/home/antoniocorvino/Projects/BuildingsExtraction/runs/"
+    dataset_root = Path("/mnt/nas151/sar/Footprint/datasets") / args.dataset_root / args.tile_size
+    deriverd_root = dataset_root / "derived"
+    runs_root = Path("/home/antoniocorvino/Projects/BuildingsExtraction/runs")
 
     # args.models are run directories; model_names are their stems
     model_names = [Path(m).stem for m in args.models]
@@ -167,7 +167,7 @@ def main(args):
 
     # Per-model inference
     for model_name, model_dir in zip(model_names, args.models):
-        model_path = f"{runs_root}/{model_dir}/best_model.pth"
+        model_path = runs_root / model_dir / "best_model.pth"
         model = load_model(model_path, device)
 
         for split in splits:
