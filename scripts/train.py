@@ -43,7 +43,7 @@ def parse_args():
     parser.add_argument("--lr", type=float, default=1e-3)
 
     parser.add_argument("--arch", type=str, choices=["unet", "unetL", "unetLL"], default="unetLL")
-    parser.add_argument("--loss", type=str, choices=["bce", "wbce", "wbce_dice", "tversky", "focal_tversky"], default="bce")
+    parser.add_argument("--loss", type=str, choices=["bce", "dice", "focal", "wbce", "wbce_dice", "tversky", "focal_tversky"], default="bce")
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--seed", type=int, default=42)
 

@@ -8,7 +8,7 @@ import torch
 import rasterio
 from rasterio.errors import NotGeoreferencedWarning
 from tqdm import tqdm
-
+import random
 from src.models.unet import UNet, UNetL, UNetLL
 
 warnings.filterwarnings("ignore", category=NotGeoreferencedWarning)
@@ -94,17 +94,26 @@ def compute_agreement(preds):
     binary = preds > 0.5
     return binary.mean(axis=0).astype(np.float32)
 
+def get_tile_subset(split, dataset_root, derived_root, fraction=1.0, random_seed=42):
+    """Return a shuffled and subsetted list of tiles for a given split."""
 
-def infer_model_split(model, model_name, split, dataset_root, derived_root, max_tiles=None):
-    """Run inference for a single model on a given split."""
 
     in_dir = dataset_root / split / "images"
-    out_dir = derived_root / split / model_name
     tiles = sorted(in_dir.glob("*.tif"))
 
+    random.seed(random_seed)
+    random.shuffle(tiles)
+    n_tiles = int(len(tiles) * fraction)
+    tiles_subset = tiles[:n_tiles]
     
-    if max_tiles is not None:
-        tiles = tiles[:max_tiles]
+    # Save the list of processed tiles
+    np.save(derived_root / split / "processed_tiles.npy", [tile.name for tile in tiles_subset])
+    
+    return tiles_subset   
+
+def infer_model_split(model, model_name, split, dataset_root, derived_root, tiles):
+    """Run inference for a single model on a given split."""
+
 
     for tile in tqdm(tiles, desc=f"{model_name} {split}"):
         with rasterio.open(tile) as src:
@@ -117,16 +126,11 @@ def infer_model_split(model, model_name, split, dataset_root, derived_root, max_
 
         img_tensor = torch.from_numpy(img).unsqueeze(0)  # (1, C, H, W)
         pred = predict(model, img_tensor)  # (H, W)
-        save_tif(out_dir / tile.name, pred, profile)
+        save_tif(derived_root / split/ model_name / tile.name, pred, profile)
 
 
-def compute_ensemble_split(model_names, split, dataset_root, derived_root, max_tiles=None):
+def compute_ensemble_split(model_names, split, dataset_root, derived_root, tiles):
     """Compute ensemble statistics (mean, std, entropy, agreement) for a given split."""
-    in_dir = dataset_root / split / "images"
-    tiles = sorted(in_dir.glob("*.tif"))
-    
-    if max_tiles is not None:
-        tiles = tiles[:max_tiles]
 
     for tile in tqdm(tiles, desc=f"ensemble {split}"):
         preds = []
@@ -154,7 +158,7 @@ def main(args):
     device = torch.device("cuda" if args.device == "cuda" and torch.cuda.is_available() else "cpu")
 
     dataset_root = Path("/mnt/nas151/sar/Footprint/datasets") / args.dataset_root / args.tile_size
-    deriverd_root = dataset_root / "derived"
+    derived_root = dataset_root / "derived"
     runs_root = Path("/home/antoniocorvino/Projects/BuildingsExtraction/runs")
 
     # args.models are run directories; model_names are their stems
@@ -165,21 +169,23 @@ def main(args):
 
     ensure_dirs(derived_root, splits, layers, model_names)
 
-    # Per-model inference
-    for model_name, model_dir in zip(model_names, args.models):
-        model_path = runs_root / model_dir / "best_model.pth"
-        model = load_model(model_path, device)
+    for split in splits:
+        # Shuffle and subset tiles once per split
+        tiles = get_tile_subset(split, dataset_root, derived_root, fraction=args.fraction, random_seed=args.random_seed)
 
-        for split in splits:
-            infer_model_split(model, model_name, split, dataset_root, derived_root, args.max_tiles)
+    
+        # Per-model inference
+        for model_name, model_dir in zip(model_names, args.models):
+            model_path = runs_root / model_dir / "best_model.pth"
+            model = load_model(model_path, device)
+            infer_model_split(model, model_name, split, dataset_root, derived_root, tiles)
 
-        del model
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+            del model
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
     # Ensemble statistics
-    for split in splits:
-        compute_ensemble_split(model_names, split, dataset_root, derived_root, args.max_tiles)
+        compute_ensemble_split(model_names, split, dataset_root, derived_root, tiles)
 
 
 if __name__ == "__main__":
@@ -198,7 +204,6 @@ if __name__ == "__main__":
         help="Tile size subfolder (e.g. tiles_256)"
     )
 
-
     parser.add_argument(
         "--models",
         nargs="+",
@@ -207,10 +212,17 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--max_tiles",
+        "--random_seed",
         type=int,
-        default=None,
-        help="Process only the first N tiles of each split (useful for quick tests)"
+        default=42,
+        help="Random seed for shuffling"
+    )
+
+    parser.add_argument(
+        "--fraction",
+        type=float,
+        default=1.0,
+        help="Process only the N*fraction tiles of each split (useful for quick tests)"
     )
 
     parser.add_argument(
