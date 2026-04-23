@@ -30,6 +30,7 @@ def parse_args():
     parser = argparse.ArgumentParser("Building Footprint Training")
 
     parser.add_argument("--dataset_name", type=str, default="WHUBuildingDataset")
+    parser.add_argument("--dropout_rate", type=float, default=0.2)
 
     parser.add_argument("--in_channels", type=int, default=3)
     parser.add_argument("--extra_channels", type=str, nargs="*", default=[],
@@ -155,6 +156,7 @@ def main():
         "batch_size": args.batch_size,
         "epochs": args.epochs,
         "learning_rate": args.lr,
+        "dropout_rate": 0.2,
         "architecture": args.arch,
         "loss": args.loss,
         "num_workers": args.num_workers,
@@ -182,10 +184,8 @@ def main():
     for epoch in range(1, args.epochs + 1):
         start = time.time()
 
-
         tr = trainer.train_one_epoch(train_loader)
         va = trainer.validate(val_loader)
-
 
         epoch_time = time.time() - start
         logger.log(epoch, tr, va, epoch_time)

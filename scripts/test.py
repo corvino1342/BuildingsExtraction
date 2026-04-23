@@ -9,37 +9,42 @@ import matplotlib.pyplot as plt
 from matplotlib import patches
 
 from src.models.unet import UNet, UNetL, UNetLL
-from src.models.deeplabv3 import DeepLabV3
+# from src.models.deeplabv3 import DeepLabV3
 
+# Supported image extensions
+SUPPORTED_EXTENSIONS = {".tif", ".tiff", ".png", ".jpg", ".jpeg"}
 
 # --------------------------------------------------
 # CLI
 # --------------------------------------------------
 
 def parse_args():
-    parser = argparse.ArgumentParser("Flexible cross-dataset inference")
+    parser = argparse.ArgumentParser(description="Test a single model on images with ground truth.")
 
-    parser.add_argument("--dataset_root", type=str, required=True)
-    parser.add_argument("--eval_dataset", type=str, required=True)
-    parser.add_argument("--tile_size", type=str, default="tiles")
-    parser.add_argument("--split", type=str, default="test")
+    parser.add_argument("--dataset_root", type=str, required=True,
+                        help="Root directory containing the dataset.")
+    parser.add_argument("--eval_dataset", type=str, required=True,
+                        help="Name of the dataset to evaluate on.")
+    parser.add_argument("--tile_size", type=str, default="tiles",
+                        help="Subdirectory under eval_dataset containing the tiles.")
+    parser.add_argument("--split", type=str, default="test",
+                        help="Dataset split to evaluate on (e.g., test, val).")
 
+    parser.add_argument("--model_path", type=str, required=True,
+                        help="Path to the model's best_model.pth weights.")
+    parser.add_argument("--model_name", type=str, required=True,
+                        help="Name of the model architecture (e.g., unetLL, deeplabv3).")
 
-    parser.add_argument("--pred_only", action="store_true", help="Save only the predicted masks (with no overlay or three-plot)")
-    parser.add_argument("--runs_root", type=str, required=True)
-    parser.add_argument("--runs", nargs="+", required=True,
-                        help="Format: TRAIN_DATASET/MODEL_NAME")
-
-    parser.add_argument("--all_images", action="store_true")
     parser.add_argument("--images", nargs="+",
-                        help="Optional specific image names (without extension)")
-
-    parser.add_argument("--threshold", type=float, default=0.5)
-    parser.add_argument("--device", type=str, default="cuda",
-                        choices=["cuda", "cpu", "mps"])
+                        help="Optional specific image names (without extension) to process.")
+    parser.add_argument("--all_images", action="store_true",
+                        help="Process all images in the dataset.")
+    parser.add_argument("--threshold", type=float, default=0.5,
+                        help="Threshold for converting probabilities to binary masks.")
+    parser.add_argument("--device", type=str, default="cuda", choices=["cuda", "cpu", "mps"],
+                        help="Device to use for inference.")
 
     return parser.parse_args()
-
 
 # --------------------------------------------------
 # Model factory
@@ -56,7 +61,6 @@ def build_model(model_name):
         return DeepLabV3(num_classes=1)
     raise ValueError(f"Unknown model type: {model_name}")
 
-
 # --------------------------------------------------
 # Utilities
 # --------------------------------------------------
@@ -64,8 +68,7 @@ def build_model(model_name):
 def save_mask(out_dir, image_name, pred_mask):
     pred_uint8 = (pred_mask > 0).astype(np.uint8) * 255
     pred_img = Image.fromarray(pred_uint8, mode="L")
-    pred_img.save(out_dir / "predict" / f"{image_name}.tif")
-
+    pred_img.save(out_dir / f"{image_name}.tif")
 
 def save_overlay(out_path, image, pred_mask, true_mask, title):
     img_np = np.array(image)
@@ -101,12 +104,11 @@ def save_overlay(out_path, image, pred_mask, true_mask, title):
     ax.imshow(overlay)
     ax.set_title(title)
     ax.axis("off")
-
     ax.legend(handles=legend_elements, loc="upper left", fontsize=10)
 
     plt.savefig(out_path)
     plt.close()
-    
+
 def save_three_plot(out_path, model_title, image, pred_mask, true_mask):
     if true_mask is None:
         ncols = 2
@@ -157,12 +159,10 @@ def save_three_plot(out_path, model_title, image, pred_mask, true_mask):
 def main():
     args = parse_args()
 
-    device = torch.device(
-        args.device if torch.cuda.is_available() or args.device != "cuda" else "cpu"
-    )
+    device = torch.device(args.device if torch.cuda.is_available() or args.device != "cuda" else "cpu")
 
     dataset_root = Path(args.dataset_root)
-    runs_root = Path(args.runs_root)
+    model_path = Path(args.model_path)
 
     image_dir = dataset_root / args.eval_dataset / args.tile_size / args.split / "images"
     gt_dir = dataset_root / args.eval_dataset / args.tile_size / args.split / "gt"
@@ -178,24 +178,21 @@ def main():
         if not args.images:
             raise ValueError("Use --all_images or provide --images")
         image_paths = []
-
-    for name in args.images:
-        found = False
-        for ext in SUPPORTED_EXTENSIONS:
-            candidate = image_dir / f"{name}{ext}"
-            if candidate.exists():
-                image_paths.append(candidate)
-                found = True
-                break
-            # also check uppercase extension
-            candidate_upper = image_dir / f"{name}{ext.upper()}"
-            if candidate_upper.exists():
-                image_paths.append(candidate_upper)
-                found = True
-                break
-
-        if not found:
-            raise FileNotFoundError(f"No file found for {name} with supported extensions")
+        for name in args.images:
+            found = False
+            for ext in SUPPORTED_EXTENSIONS:
+                candidate = image_dir / f"{name}{ext}"
+                if candidate.exists():
+                    image_paths.append(candidate)
+                    found = True
+                    break
+                candidate_upper = image_dir / f"{name}{ext.upper()}"
+                if candidate_upper.exists():
+                    image_paths.append(candidate_upper)
+                    found = True
+                    break
+            if not found:
+                raise FileNotFoundError(f"No file found for {name} with supported extensions")
 
     print(f"\nEvaluating on: {args.eval_dataset} ({args.split})")
     print(f"Images: {len(image_paths)}")
@@ -203,42 +200,35 @@ def main():
 
     transform = transforms.ToTensor()
 
-    models = {}
+    # Load model
+    model = build_model(args.model_name).to(device)
+    model.load_state_dict(torch.load(model_path, map_location=device), strict=False)
+    model.eval()
 
-    # Load models
-    for run_id in args.runs:
-        train_dataset, model_name = run_id.split("/")
-
-        model = build_model(model_name).to(device)
-
-        ckpt_path = runs_root / train_dataset / model_name / "best_model.pth"
-
-        if not ckpt_path.exists():
-            raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
-
-        model.load_state_dict(torch.load(ckpt_path, map_location=device), strict=False)
-        model.eval()
-
-        models[run_id] = model
-        print(f"Loaded {run_id}")
+    result_dir = (
+        Path("experiments")
+        / f"eval_on_{args.eval_dataset}"
+        / f"split_{args.split}"
+        / f"{args.model_name}_trained_on_{model_path.parent.name}"
+    )
+    (result_dir / "predict").mkdir(parents=True, exist_ok=True)
+    (result_dir / "overlay").mkdir(parents=True, exist_ok=True)
+    (result_dir / "threeplot").mkdir(parents=True, exist_ok=True)
 
     total_start = time.time()
 
     # Inference loop
     for img_path in image_paths:
-
-        image = Image.open(img_path).convert("RGB")
         image_name = img_path.stem
+        image = Image.open(img_path).convert("RGB")
 
         gt_path = None
-
         for ext in SUPPORTED_EXTENSIONS:
-            candidate = gt_dir / f"{img_path.stem}{ext}"
+            candidate = gt_dir / f"{image_name}{ext}"
             if candidate.exists():
                 gt_path = candidate
                 break
-
-            candidate_upper = gt_dir / f"{img_path.stem}{ext.upper()}"
+            candidate_upper = gt_dir / f"{image_name}{ext.upper()}"
             if candidate_upper.exists():
                 gt_path = candidate_upper
                 break
@@ -247,53 +237,36 @@ def main():
 
         input_tensor = transform(image).unsqueeze(0).to(device)
 
-        for run_id, model in models.items():
+        with torch.no_grad():
+            logits = model(input_tensor)
+            prob = torch.sigmoid(logits)
+            pred = (prob > args.threshold).float()
 
-            train_dataset, model_name = run_id.split("/")
+        pred_np = pred.squeeze().cpu().numpy()
+        gt_np = np.array(true_mask) > 0 if true_mask else None
 
-            result_dir = (
-                Path("experiments")
-                / f"eval_on_{args.eval_dataset}"
-                / f"split_{args.split}"
-                / f"{model_name}_trained_on_{train_dataset}"
+        save_mask(result_dir / "predict", image_name, pred_np)
+
+        if gt_np is not None:
+            save_overlay(
+                result_dir / "overlay" / f"{image_name}.tif",
+                image,
+                pred_np,
+                gt_np,
+                f"{args.model_name} | trained on {args.eval_dataset}"
             )
 
-            (result_dir / "predict").mkdir(parents=True, exist_ok=True)
-            (result_dir / "overlay").mkdir(parents=True, exist_ok=True)
-            (result_dir / "threeplot").mkdir(parents=True, exist_ok=True)
-
-            with torch.no_grad():
-                logits = model(input_tensor)
-                prob = torch.sigmoid(logits)
-                pred = (prob > args.threshold).float()
-
-            pred_np = pred.squeeze().cpu().numpy()
-            gt_np = np.array(true_mask) > 0 if true_mask else None
-
-            save_mask(result_dir, image_name, pred_np)
-
-            if not args.pred_only:
-            
-                save_overlay(
-                    result_dir / "overlay" / f"{image_name}.tif",
-                    image,
-                    pred_np,
-                    gt_np,
-                    f"{model_name} | trained on {train_dataset}"
-                )
-            
-                save_three_plot(
-                    result_dir / "threeplot" / f"{image_name}.tif",
-                    f"{model_name} | trained on {train_dataset}",
-                    image,
-                    pred_np,
-                    gt_np
-                )
+            save_three_plot(
+                result_dir / "threeplot" / f"{image_name}.tif",
+                f"{args.model_name} | trained on {args.eval_dataset}",
+                image,
+                pred_np,
+                gt_np
+            )
 
         print(f"Processed {image_name}")
 
     print(f"\nTotal inference time: {time.time() - total_start:.2f}s")
-SUPPORTED_EXTENSIONS = {".tif", ".tiff", ".png", ".jpg", ".jpeg"}
 
 if __name__ == "__main__":
     main()
