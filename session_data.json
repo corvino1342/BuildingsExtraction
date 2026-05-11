@@ -1,0 +1,70 @@
+{
+  "networks": {
+    "aaaa": {
+      "name": "aaaa",
+      "color": "#FF6347",
+      "frequency": 900,
+      "created": "2026-04-15T06:43:36.471Z",
+      "nextAntennaNumber": 3,
+      "availableAntennaNumbers": [
+        2
+      ],
+      "templateSettings": {
+        "dbData": null,
+        "hasCustomAntennaSettings": false,
+        "cableData": null,
+        "cableLength": 10,
+        "hasCustomCableSettings": false,
+        "power": 1,
+        "azimuth": {
+          "enabled": false,
+          "beams": [],
+          "peakIntensity": 1,
+          "minIntensity": 0.1,
+          "fadeRange": 10,
+          "generatedPattern": null,
+          "azFileContent": null
+        }
+      },
+      "antennas": [
+        {
+          "id": "aaaa_ant_1_1776235494135",
+          "name": "Antenna_1",
+          "latDD": 41.44187073909662,
+          "lonDD": 12.900668800381386,
+          "heightAGL": 1,
+          "power": 1,
+          "enabled": true,
+          "azimuth": {
+            "enabled": false,
+            "beams": [],
+            "peakIntensity": 1,
+            "minIntensity": 0.1,
+            "fadeRange": 10,
+            "generatedPattern": null,
+            "azFileContent": null
+          },
+          "dbData": null,
+          "cableData": null,
+          "cableLength": 10,
+          "hasCustomAntennaSettings": false,
+          "hasCustomCableSettings": false,
+          "eirp": {
+            "txPowerDBm": 30,
+            "antennaGainDBi": 0,
+            "cableLossDB": 0,
+            "totalEIRP": 30
+          }
+        }
+      ]
+    }
+  },
+  "timestamp": "2026-04-15T06:50:24.465Z",
+  "version": "1.0",
+  "sessionRunIds": [
+    {
+      "id": "05e123cf-9684-4065-a54d-190e0142aca4",
+      "name": "aaaa_chunk1"
+    }
+  ]
+}
