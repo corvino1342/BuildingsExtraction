@@ -18,7 +18,7 @@ import json
 from datetime import datetime
 
 # Run from project root:
-# python -m scripts.train --dataset_name WHUBuildingDataset --fixed_size --tile_size 256 --batch_size 32 --epochs 30 --lr 0.001 --arch unetLL --loss wbce --extra_channels prob_mean
+# python -m scripts.train --dataset_name InriaBuildingDataset --fixed_size --tile_size 256 --batch_size 32 --epochs 50 --lr 0.0001 --arch unetLL --loss bce --extra_channels prob_mean
 
 
 # --------------------------------------------------

@@ -18,6 +18,8 @@ SUPPORTED_EXTENSIONS = {".tif", ".tiff", ".png", ".jpg", ".jpeg"}
 # CLI
 # --------------------------------------------------
 
+# python -m scripts.test --dataset_root /mnt/nas151/sar/Footprint/datasets/ --eval_dataset WHUBuildingDataset --tile_size tiles --split test --model_path /home/antoniocorvino/Projects/BuildingsExtraction/runs/WHUBuildingDataset/unetLL_bce_dim256_n47088_bs8/best_model.pth --model_name unetLL --images 31097 --threshold 0.5 --device cuda
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Test a single model on images with ground truth.")
 
@@ -200,9 +202,13 @@ def main():
 
     transform = transforms.ToTensor()
 
+    
+    
     # Load model
     model = build_model(args.model_name).to(device)
+
     model.load_state_dict(torch.load(model_path, map_location=device), strict=False)
+
     model.eval()
 
     result_dir = (
