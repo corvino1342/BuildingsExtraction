@@ -1,6 +1,6 @@
 
 import numpy as np
-from shapely.geometry import Polygon
+# from shapely.geometry import Polygon
 from PIL import Image
 import matplotlib.pyplot as plt
 
@@ -10,19 +10,18 @@ import pyproj
 from pyproj import Transformer
 import math
 
-def read_antennas_from_json(
-    json_file_path: str,
-    lat_key: str = "latDD",
-    lon_key: str = "lonDD",
-) -> List[Dict[str, Union[float, str, int, bool]]]:
+# from sentinelhub import SHConfig, BBox, CRS, DataCollection, MimeType, SentinelHubRequest
+from typing import Tuple, Optional
+
+import ee
+
+def read_antennas_from_json(json_file_path):
     """
     Reads a JSON file containing antenna characteristics and returns a list of dictionaries,
     each representing an antenna with its properties (e.g., latDD, lonDD).
 
     Args:
         json_file_path: Path to the JSON file.
-        lat_key: Key for latitude in the JSON (default: "latDD").
-        lon_key: Key for longitude in the JSON (default: "lonDD").
 
     Returns:
         A list of dictionaries, where each dictionary represents an antenna and contains:
@@ -43,7 +42,6 @@ def read_antennas_from_json(
         raise json.JSONDecodeError("The JSON file is malformed.", doc=json_file_path, pos=0)
     
     return data
-
 
 def generate_grid(antenna_lon, antenna_lat, tile_size_meters, grid_radius_km, output_file=None):
     """
@@ -173,76 +171,135 @@ def bbox_to_center(bbox):
     center_lon = (min(lons) + max(lons)) / 2
     return (center_lat, center_lon)
 
-
-
-
-def download_aerial_image(polygon_vertices, output_file="aerial_image.png", resolution=10):
+def download_sentinel2_rgb(
+    bbox: Tuple[float, float, float, float],
+    output_file: str = "sentinel2_rgb.png",
+    width: int = 1024,
+    height: int = 1024,
+    client_id: Optional[str] = None,
+    client_secret: Optional[str] = None,
+    maxcc: float = 0.2,
+) -> np.ndarray:
     """
-    Downloads an aerial image for a polygon defined by its vertices (lat/lon).
+    Downloads a true-color RGB satellite image from Sentinel-2 for a given bounding box.
+    Uses the SentinelHubRequest API to fetch and process the image.
 
     Args:
-        polygon_vertices: List of (lon, lat) tuples defining the polygon vertices.
-        output_file: Path to save the output image (default: "aerial_image.png").
-        resolution: Desired resolution in meters (default: 10).
+        bbox: Tuple of (min_lon, min_lat, max_lon, max_lat) in WGS84 (EPSG:4326).
+        output_file: Path to save the RGB image (default: "sentinel2_rgb.png").
+        width: Width of the output image in pixels (default: 1024).
+        height: Height of the output image in pixels (default: 1024).
+        client_id: Sentinel Hub client ID. If None, reads from ~/.sentinelhub/config.json.
+        client_secret: Sentinel Hub client secret. If None, reads from ~/.sentinelhub/config.json.
+        maxcc: Maximum cloud coverage (0-1, default: 0.2).
+
+    Returns:
+        The RGB image as a NumPy array (shape: height x width x 3).
     """
-    # Configure Sentinel Hub API
+    # Configure Sentinel Hub (global config)
     config = SHConfig()
-    # Replace with your credentials (get them from https://apps.sentinel-hub.com/dashboard/)
-    config.sh_client_id = 'YOUR_CLIENT_ID'
-    config.sh_client_secret = 'YOUR_CLIENT_SECRET'
-    config.save()
+    config.sh_client_id = 'sh-f6c245a1-4a4e-4500-b2e6-ea5f054a8fac'       # Your credentials
+    config.sh_client_secret = 'YjX7lMUqB28jFzFbdHXIiaQemTmRHeE7'      # Your credentials
+    config.save()  # Save to ~/.sentinelhub/config.json
 
-    # Create a Shapely polygon from the vertices
-    polygon = Polygon(polygon_vertices)
 
-    # Get the bounding box of the polygon
-    min_lon, min_lat, max_lon, max_lat = polygon.bounds
-    bbox = BBox([min_lon, min_lat, max_lon, max_lat], crs=CRS.WGS84)
 
-    # Calculate the size of the output image in pixels
-    # Approximate meters per degree at the polygon's latitude
-    lat = (min_lat + max_lat) / 2
-    meters_per_degree = 111320  # Approximate meters per degree of latitude
-    meters_per_degree_lon = meters_per_degree * np.cos(np.radians(lat))
-    width_px = int((max_lon - min_lon) * meters_per_degree_lon / resolution)
-    height_px = int((max_lat - min_lat) * meters_per_degree / resolution)
-
-    # Request the image from Sentinel-2 (true color: B04=Red, B03=Green, B02=Blue)
-    try:
-        img = bbox_to_img(
-            bbox=bbox,
-            width=width_px,
-            height=height_px,
-            config=config,
-            data_collection=DataCollection.SENTINEL2_L2A,
-            bands=["B04", "B03", "B02"],  # RGB
-            maxcc=0.2,  # Maximum cloud coverage (0-1)
+    # Configure Sentinel Hub (use provided credentials or fall back to saved config)
+    request_config = SHConfig()
+    if client_id and client_secret:
+        request_config.sh_client_id = client_id
+        request_config.sh_client_secret = client_secret
+    elif not (config.sh_client_id and config.sh_client_secret):
+        raise ValueError(
+            "Sentinel Hub credentials not provided and not found in ~/.sentinelhub/config.json. "
+            "Sign up at https://www.sentinelhub.com/ and create a configuration."
         )
+    else:
+        request_config = config  # Use the global config
 
-        # Normalize and save the image
-        img = np.clip(img * 255, 0, 255).astype(np.uint8)
-        img_pil = Image.fromarray(img)
-        img_pil.save(output_file)
-        print(f"Aerial image saved to {output_file}")
+    # Create the bounding box object
+    bbox_obj = BBox(bbox, crs=CRS.WGS84)
 
-        # Optional: Display the image
-        plt.imshow(img_pil)
-        plt.axis('off')
-        plt.show()
+    # Define the evalscript for RGB (B04=Red, B03=Green, B02=Blue)
+    evalscript = """
+    //VERSION=3
+    function setup() {
+        return {
+            input: [{
+                bands: ["B02", "B03", "B04"],
+                units: "DN"
+            }],
+            output: {
+                bands: 3,
+                sampleType: "UINT8"
+            }
+        };
+    }
+    function evaluatePixel(sample) {
+        return [sample.B04 * 2.5, sample.B03 * 2.5, sample.B02 * 2.5];
+    }
+    """
 
+    # Create a request (REMOVED the `layer` argument, which is invalid)
+    request = SentinelHubRequest(
+        evalscript=evalscript,
+        input_data=[
+            SentinelHubRequest.input_data(
+                data_collection=DataCollection.SENTINEL2_L2A
+            )
+        ],
+        responses=[SentinelHubRequest.output_response("default", MimeType.PNG)],
+        bbox=bbox_obj,
+        size=(width, height),
+        config=request_config
+    )
+
+    # Get the image
+    try:
+        img = request.get_data()[0]  # Returns a NumPy array (height x width x 4)
+        img = img[:, :, :3]  # Remove alpha channel if present
     except Exception as e:
-        print(f"Error downloading image: {e}")
+        raise Exception(f"Failed to download image: {e}")
+
+    # Save the image
+    Image.fromarray(img).save(output_file)
+    print(f"✅ RGB image saved to {output_file}")
+    return img
+
+
+# --- AUTHENTICATE ONCE (outside the function) ---
+# Run this ONCE in a Python shell or at the start of your script:
+ee.Authenticate()
+def download_google_earth_rgb(bbox, output_file="google_earth_rgb.png"):
+
+    # Initialize Earth Engine
+    ee.Initialize(project='radiocoverage')
+
+    # Define your region of interest
+    region = ee.Geometry.Rectangle(bbox)
+
+    # Get a high-resolution image (e.g., WorldView-3)
+    image = ee.ImageCollection("projects/Maxar/WorldView3").filterBounds(region).first()
+    if not image:
+        raise ValueError("No images found for the given bounding box.")
+
+    # Get the RGB visualization URL
+    url = image.getThumbURL({
+        "bands": ["Red", "Green", "Blue"],
+        "region": region,
+        "scale": 1,  # Adjust for your needs
+    })
+
+    # Download the image
+    import requests
+    from PIL import Image
+    from io import BytesIO
+    response = requests.get(url)
+    img = Image.open(BytesIO(response.content))
+    img.save(output_file)
+    print(f"✅ Image saved to {output_file}")
+    return img
 
 # Example usage:
-
-json_path = "/home/antoniocorvino/Projects/BuildingsExtraction/session_data.json"
-
-antenna = read_antennas_from_json(json_path)
-
-antenna_lon = antenna['networks']['aaaa']['antennas'][0]['lonDD']
-antenna_lat = antenna['networks']['aaaa']['antennas'][0]['latDD']
-
-print(generate_grid(antenna_lon, antenna_lat, tile_size_meters=90, grid_radius_km=0.1))
-
-# Download the image
-# download_aerial_image(polygon_vertices, output_file="rome_aerial.png")
+bbox = [12.49, 41.89, 12.51, 41.90]  # Rome, Italy (as [min_lon, min_lat, max_lon, max_lat])
+download_google_earth_rgb(bbox=bbox)
