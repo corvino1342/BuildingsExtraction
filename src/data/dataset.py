@@ -1,4 +1,6 @@
 import os
+import rasterio
+import numpy as np
 from PIL import Image
 from torch.utils.data import Dataset
 import torch

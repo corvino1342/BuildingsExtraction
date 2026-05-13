@@ -29,6 +29,7 @@ from datetime import datetime
 def parse_args():
     parser = argparse.ArgumentParser("Building Footprint Training")
 
+    parser.add_argument("--dataset_path", type=str, default="/mnt/nas151/sar/Footprint/datasets")
     parser.add_argument("--dataset_name", type=str, default="WHUBuildingDataset")
     parser.add_argument("--dropout_rate", type=float, default=0.2)
 
@@ -48,9 +49,8 @@ def parse_args():
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--seed", type=int, default=42)
 
-    # parser.add_argument("--dataset_path", type=str, required=True)
     # parser.add_argument("--mode", type=str, choices=["tiles", "instances"], default="tiles") #if instances set batch_size to 1. UNet cannot handle batch with different tile size
-    # parser.add_argument("--output_dir", type=str, default="./runs")
+    parser.add_argument("--output_dir", type=str, default="./runs")
 
     return parser.parse_args()
 # --------------------------------------------------
@@ -76,8 +76,8 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     use_amp = device.type == "cuda"
     scaler = torch.amp.GradScaler('cuda', enabled=use_amp)
-    dataset_path = "/mnt/nas151/sar/Footprint/datasets"
-    output_dir = "/home/antoniocorvino/Projects/BuildingsExtraction/runs"
+    dataset_path = args.dataset_path
+    output_dir = args.output_dir
     extra_dirs = ""
 
 
