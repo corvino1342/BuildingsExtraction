@@ -15,6 +15,10 @@ from typing import Tuple, Optional
 
 import ee
 
+
+# caltanissetta - 37.536086 14.056348
+# uscita tunnel - 37.490418 14.056694
+
 def read_antennas_from_json(json_file_path):
     """
     Reads a JSON file containing antenna characteristics and returns a list of dictionaries,
@@ -269,17 +273,17 @@ def download_sentinel2_rgb(
 
 # --- AUTHENTICATE ONCE (outside the function) ---
 # Run this ONCE in a Python shell or at the start of your script:
-ee.Authenticate()
-def download_google_earth_rgb(bbox, output_file="google_earth_rgb.png"):
+# ee.Authenticate()
+def download_google_earth_rgb(bbox, output_file="caltanissetta.png"):
 
     # Initialize Earth Engine
-    ee.Initialize(project='radiocoverage')
+    ee.Initialize(project='radio-coverage')
 
     # Define your region of interest
     region = ee.Geometry.Rectangle(bbox)
 
     # Get a high-resolution image (e.g., WorldView-3)
-    image = ee.ImageCollection("projects/Maxar/WorldView3").filterBounds(region).first()
+    image = ee.ImageCollection("COPERNICUS/S2_SR").filterBounds(region).first()
     if not image:
         raise ValueError("No images found for the given bounding box.")
 
@@ -300,6 +304,7 @@ def download_google_earth_rgb(bbox, output_file="google_earth_rgb.png"):
     print(f"✅ Image saved to {output_file}")
     return img
 
+
 # Example usage:
-bbox = [12.49, 41.89, 12.51, 41.90]  # Rome, Italy (as [min_lon, min_lat, max_lon, max_lat])
+bbox = [14.04, 37.52, 14.06, 37.54]  # Caltanissetta, Italy (as [min_lon, min_lat, max_lon, max_lat])
 download_google_earth_rgb(bbox=bbox)
