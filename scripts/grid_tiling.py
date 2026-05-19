@@ -19,6 +19,58 @@ import ee
 # caltanissetta - 37.536086 14.056348
 # uscita tunnel - 37.490418 14.056694
 
+def compute_tile_stats(mask, tiles):
+    """
+    Computes the sum of building pixels for each tile in the mask.
+
+    Args:
+        mask: Binary mask (same size as screenshot).
+        tiles: List of tiles from `generate_grid_in_pixels`.
+
+    Returns:
+        List of tiles with added `building_sum` field.
+    """
+    for tile in tiles:
+        y_min, x_min = tile["bbox_pixel"][0]
+        y_max, x_max = tile["bbox_pixel"][2]
+
+        # Extract the tile from the mask
+        tile_mask = mask[y_min:y_max, x_min:x_max]
+
+        # Sum the building pixels (1s)
+        tile["building_sum"] = int(np.sum(tile_mask))
+
+    return tiles
+
+def scale_meters_pixels(bbox, image):
+    """
+    Converts a distance in meters to pixels at a given latitude and longitude.
+    This is useful for determining how many pixels correspond to a certain distance on the ground.
+
+    Args:
+        bbox: A tuple (min_lat, min_lon, max_lat, max_lon) representing the bounding box.
+        image: A PIL Image object representing the image.
+    Returns:
+        A tuple (meters_per_pixel_x, meters_per_pixel_y) representing the scale in meters per pixel in the x and y directions.
+    """
+    min_lat = bbox[0]
+    max_lat = bbox[2]
+    min_lon = bbox[1]
+    max_lon = bbox[3]
+
+    image_width, image_height = image.size
+    # Calculate the center latitude for scale calculation
+    lat = (min_lat + max_lat) / 2
+
+    # Calculate meters per pixel
+    meters_per_degree_lat = 111320  # ~111 km per degree at the equator
+    meters_per_degree_lon = 111320 * math.cos(math.radians((min_lat + max_lat) / 2))  # Adjust for latitude
+
+    scale_lat = (max_lat - min_lat) * meters_per_degree_lat / image_height
+    scale_lon = (max_lon - min_lon) * meters_per_degree_lon / image_width
+    return scale_lat, scale_lon
+
+
 def read_antennas_from_json(json_file_path):
     """
     Reads a JSON file containing antenna characteristics and returns a list of dictionaries,
@@ -47,7 +99,143 @@ def read_antennas_from_json(json_file_path):
     
     return data
 
-def generate_grid(antenna_lon, antenna_lat, tile_size_meters, grid_radius_km, output_file=None):
+def generate_grid_in_pixels(bbox, screenshot_width, screenshot_height, tile_size_meters, output_file):
+    """
+    Generates a grid of tiles in pixel coordinates, covering the input bbox.
+    Returns a list of dictionaries, where each dictionary contains:
+    - center_pixel: (row, col) of the tile center in pixel coordinates.
+    - bbox_pixel: [(y1, x1), (y1, x2), (y2, x2), (y2, x1)] of the tile in pixel coordinates.
+    - bbox_real: Real-world bounding box [(min_lat, min_lon), ...] of the tile.
+
+    Args:
+        bbox: Real-world bounding box of the screenshot: [min_lon, min_lat, max_lon, max_lat]
+        screenshot_width: Width of the screenshot in pixels.
+        screenshot_height: Height of the screenshot in pixels.
+        tile_size_meters: Size of each tile in meters.
+        output_file: Optional path to save the results to a JSON file.
+
+    Returns:
+        A list of tile dictionaries with pixel and real-world coordinates.
+    """
+    # Extract real-world bbox coordinates
+    min_lat, min_lon = bbox[0], bbox[1]
+    max_lat, max_lon = bbox[2], bbox[3]
+
+    # Calculate meters per pixel
+    meters_per_degree_lat = 111320
+    meters_per_degree_lon = 111320 * math.cos(math.radians((min_lat + max_lat) / 2))
+
+    scale_lat = (max_lat - min_lat) * meters_per_degree_lat / screenshot_height
+    scale_lon = (max_lon - min_lon) * meters_per_degree_lon / screenshot_width
+
+    # Calculate tile size in pixels
+    tile_size_pixels_lat = tile_size_meters / scale_lat
+    tile_size_pixels_lon = tile_size_meters / scale_lon
+
+    # Calculate the center of the screenshot in pixels
+    center_pixel_col = screenshot_width // 2
+    center_pixel_row = screenshot_height // 2
+
+    # Calculate the number of tiles needed to cover the bbox
+    n_tiles = int(math.ceil(max(max_lat - min_lat, max_lon - min_lon) * 111320 / tile_size_meters))
+
+    # Generate the grid in pixel coordinates
+    tiles = []
+    for i in range(-n_tiles, n_tiles + 1):
+        for j in range(-n_tiles, n_tiles + 1):
+            # Calculate the pixel coordinates of the tile's center
+            center_pixel_col_tile = center_pixel_col + i * tile_size_pixels_lon
+            center_pixel_row_tile = center_pixel_row + j * tile_size_pixels_lat
+
+            # Calculate the pixel coordinates of the tile's corners
+            x_min_pixel = center_pixel_col_tile - tile_size_pixels_lon / 2
+            y_min_pixel = center_pixel_row_tile - tile_size_pixels_lat / 2
+            x_max_pixel = center_pixel_col_tile + tile_size_pixels_lon / 2
+            y_max_pixel = center_pixel_row_tile + tile_size_pixels_lat / 2
+
+            # Convert pixel coordinates to real-world lat/lon
+            min_lon_tile = min_lon + (x_min_pixel / screenshot_width) * (max_lon - min_lon)
+            max_lon_tile = min_lon + (x_max_pixel / screenshot_width) * (max_lon - min_lon)
+            min_lat_tile = min_lat + (y_min_pixel / screenshot_height) * (max_lat - min_lat)
+            max_lat_tile = min_lat + (y_max_pixel / screenshot_height) * (max_lat - min_lat)
+
+            # Create the real-world bounding box for the tile
+            tile_bbox_real = [
+                (min_lat_tile, min_lon_tile),  # Bottom-left
+                (min_lat_tile, max_lon_tile),  # Bottom-right
+                (max_lat_tile, max_lon_tile),  # Top-right
+                (max_lat_tile, min_lon_tile),  # Top-left
+            ]
+
+            # Append the tile data
+            tiles.append({
+                "center_pixel": (int(center_pixel_row_tile), int(center_pixel_col_tile)),
+                "bbox_pixel": [
+                    (int(y_min_pixel), int(x_min_pixel)),  # Bottom-left
+                    (int(y_min_pixel), int(x_max_pixel)),  # Bottom-right
+                    (int(y_max_pixel), int(x_max_pixel)),  # Top-right
+                    (int(y_max_pixel), int(x_min_pixel)),  # Top-left
+                ],
+                "bbox_real": tile_bbox_real,
+            })
+
+    # Save to file (if output_file is provided)
+    if output_file:
+        import json
+        with open(output_file, "w") as f:
+            json.dump(tiles, f, indent=4)
+
+    return tiles
+
+def show_grid_overlay(base_img, tiles, threshold, tile_color = "white", background_color = "black", alpha= 0.7):
+    """
+    Overlays a grid on a base image, highlighting tiles with building sums > threshold.
+
+    Args:
+        base_img: Base image (NumPy array, RGB format).
+        tiles: List of tiles from `generate_grid_in_pixels`.
+        threshold: Building sum threshold to highlight tiles.
+        tile_color: Color for tiles above threshold (default: "white").
+        background_color: Color for tiles below threshold (default: "black").
+        alpha: Transparency of the overlay (0.0 to 1.0).
+    """
+
+
+    print(base_img.shape, len(tiles), "tiles to overlay.")
+
+    # Create a blank mask (black background)
+    mask = np.zeros_like(base_img, dtype=np.uint8)
+    mask[:] = [0, 0, 0, 0]  # Black background
+
+    # Highlight tiles above threshold
+    for tile in tiles:
+        if tile["building_sum"] > threshold:
+            # Draw the tile in the mask
+            y_min, x_min = tile["bbox_pixel"][0]
+            y_max, x_max = tile["bbox_pixel"][2]
+
+            # Set the tile region to black with some transparency
+            mask[y_min:y_max, x_min:x_max] = [0, 0, 0, 200]  # black with some transparency
+
+    # Overlay the mask on the base image
+    fig, ax = plt.subplots(figsize=(10, 10))
+    ax.imshow(base_img, alpha=alpha)
+    ax.imshow(mask, alpha=alpha)
+
+    # Draw grid lines for clarity
+    for tile in tiles:
+        y_min, x_min = tile["bbox_pixel"][0]
+        y_max, x_max = tile["bbox_pixel"][2]
+        ax.plot([x_min, x_max], [y_min, y_min], color="red", linewidth=0.1)  # Bottom
+        ax.plot([x_min, x_max], [y_max, y_max], color="red", linewidth=0.1)  # Top
+        ax.plot([x_min, x_min], [y_min, y_max], color="red", linewidth=0.1)  # Left
+        ax.plot([x_max, x_max], [y_min, y_max], color="red", linewidth=0.1)  # Right
+
+    ax.set_title(f"Grid Overlay (Threshold={threshold})")
+    ax.axis("off")
+    plt.show()
+
+def generate_grid_from_antenna(antenna_lon, antenna_lat, tile_size_meters, grid_radius_km, output_file=None):
     """
     Generates a grid of tiles around an antenna location.
     Returns a list of dictionaries, where each dictionary contains:
@@ -113,6 +301,84 @@ def generate_grid(antenna_lon, antenna_lat, tile_size_meters, grid_radius_km, ou
     # Step 6: Save to file (if output_file is provided)
     if output_file:
         import json
+        with open(output_file, "w") as f:
+            json.dump(tiles, f, indent=4)
+
+    return tiles
+
+def generate_grid_from_bbox(bbox, tile_size_meters, output_file):
+    """
+    Generates a grid of tiles covering the input bounding box.
+    Returns a list of dictionaries, where each dictionary contains:
+    - center: (lat, lon) of the tile center.
+    - bbox: [(min_lat, min_lon), (min_lat, max_lon), (max_lat, max_lon), (max_lat, min_lon)] of the tile.
+
+    Args:
+        bbox: List of 4 coordinates in format: [min_lat, min_lon, max_lat, max_lon]
+        tile_size_meters: Side length of each square tile (in meters).
+        output_file: Optional path to save the results to a JSON file.
+
+    Returns:
+        A list of dictionaries, each representing a tile with its center and bounding box.
+    """
+    # Extract min/max lat/lon from the input bbox
+    min_lat = bbox[0]
+    max_lat = bbox[2]
+    min_lon = bbox[1]
+    max_lon = bbox[3]
+
+    # Calculate the center of the input bbox
+    center_lat = (min_lat + max_lat) / 2
+    center_lon = (min_lon + max_lon) / 2
+
+    # Find the UTM zone for the center point
+    utm_crs = pyproj.CRS.from_epsg(32600 + int((center_lon + 180) // 6) + 1)
+    wgs84 = pyproj.CRS("EPSG:4326")
+    transformer_wgs84_to_utm = Transformer.from_crs(wgs84, utm_crs, always_xy=True)
+    transformer_utm_to_wgs84 = Transformer.from_crs(utm_crs, wgs84, always_xy=True)
+
+    # Convert center to UTM (meters)
+    antenna_x, antenna_y = transformer_wgs84_to_utm.transform(center_lon, center_lat)
+
+    # Calculate the number of tiles in each direction
+    n_tiles = int(math.ceil(max(max_lat - min_lat, max_lon - min_lon) * 111320 / tile_size_meters))  # ~111320 meters per degree
+
+    print(f"Generating grid with {2*n_tiles+1} x {2*n_tiles+1} = {(2*n_tiles+1)**2} tiles...")
+
+    # Generate the grid
+    tiles = []
+    for i in range(-n_tiles, n_tiles + 1):
+        for j in range(-n_tiles, n_tiles + 1):
+            # Calculate the UTM coordinates of the tile's center and corners
+            center_x = antenna_x + i * tile_size_meters + tile_size_meters / 2
+            center_y = antenna_y + j * tile_size_meters + tile_size_meters / 2
+            x_min = center_x - tile_size_meters / 2
+            y_min = center_y - tile_size_meters / 2
+            x_max = center_x + tile_size_meters / 2
+            y_max = center_y + tile_size_meters / 2
+
+            # Convert center and corners to latitude/longitude
+            center_lon_tile, center_lat_tile = transformer_utm_to_wgs84.transform(center_x, center_y)
+            min_lon_tile, min_lat_tile = transformer_utm_to_wgs84.transform(x_min, y_min)
+            max_lon_tile, _ = transformer_utm_to_wgs84.transform(x_max, y_min)
+            _, max_lat_tile = transformer_utm_to_wgs84.transform(x_max, y_max)
+
+            # Create the bounding box (4 corners)
+            tile_bbox = [
+                (min_lat_tile, min_lon_tile),  # Bottom-left
+                (min_lat_tile, max_lon_tile),  # Bottom-right
+                (max_lat_tile, max_lon_tile),  # Top-right
+                (max_lat_tile, min_lon_tile),  # Top-left
+            ]
+
+            # Append the tile data
+            tiles.append({
+                "center": (center_lat_tile, center_lon_tile),
+                "bbox": tile_bbox,
+            })
+
+    # Save to file (if output_file is provided)
+    if output_file:
         with open(output_file, "w") as f:
             json.dump(tiles, f, indent=4)
 
@@ -306,5 +572,48 @@ def download_google_earth_rgb(bbox, output_file="caltanissetta.png"):
 
 
 # Example usage:
-bbox = [14.04, 37.52, 14.06, 37.54]  # Caltanissetta, Italy (as [min_lon, min_lat, max_lon, max_lat])
-download_google_earth_rgb(bbox=bbox)
+bbox = [14.046683, 37.531238, 14.062496, 37.540893]  # Caltanissetta, Italy (as [min_lon, min_lat, max_lon, max_lat])
+
+# generate_grid_from_bbox(bbox=bbox, tile_size_meters=30, output_file="grid_tiles.json")
+
+# print(scale_meters_pixels(bbox, Image.open("/home/unet/Projects/BuildingsExtraction/uscita_tunnel.png")))
+
+screenshot_height, screenshot_width = Image.open("/home/unet/Projects/BuildingsExtraction/uscita_tunnel.png").size
+
+
+# Define your screenshot's real-world bbox and dimensions
+tile_size_meters = 30  # 30m tiles
+
+# Generate the grid in pixel coordinates
+tiles = generate_grid_in_pixels(
+    bbox=bbox,
+    screenshot_width=screenshot_width,
+    screenshot_height=screenshot_height,
+    tile_size_meters=tile_size_meters,
+    output_file="tiles.json"
+)
+
+# Load your building mask (same size as screenshot)
+mask = np.load("/home/unet/Projects/BuildingsExtraction/experiments/example/uscita_tunnel.npy")  # Or load from image
+
+# Compute building sums for each tile
+tiles = compute_tile_stats(mask, tiles)
+
+print(len(tiles), "tiles generated and stats computed.")
+
+# Print stats for the first 3 tiles
+for i, tile in enumerate(tiles[:3]):
+    print(f"Tile {i}:")
+    print(f"  Center Pixel: {tile['center_pixel']}")
+    print(f"  Real-world Bbox: {tile['bbox_real']}")
+    print(f"  Building Pixel Sum: {tile['building_sum']}")
+
+
+show_grid_overlay(
+    base_img=np.array(Image.open("/home/unet/Projects/BuildingsExtraction/uscita_tunnel.png")),
+    tiles=tiles,
+    threshold=100,
+    tile_color="white",
+    background_color="black",
+    alpha=0.7
+)
