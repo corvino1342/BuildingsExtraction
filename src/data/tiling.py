@@ -1,4 +1,8 @@
 # buildings_dataset_creation.py
+from html import parser
+
+from html import parser
+
 from PIL import Image
 import os
 import shutil
@@ -6,8 +10,9 @@ import argparse
 import csv
 from tqdm import tqdm
 import numpy as np
+import albumentations as A 
 
-#python -m src.data.tiling --dataset_name  WHUBuildingDataset --dataset_path /mnt/nas151/sar/Footprint/dataset --tile_size 128 --stride 128 --maps_to_use -1 --splits train --overwrite --save_stats
+# python -m src.data.tiling --dataset_name  MassachusettsBuildingDataset --dataset_path /home/unet/datasets --tile_size 256 --stride 256 --maps_to_use -1 --splits train val test --overwrite --save_stats --augment --augment_factor 3
 # --------------------------------------------------
 # Argument parser
 # --------------------------------------------------
@@ -15,6 +20,11 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Create tiles for building footprint data"
     )
+
+    parser.add_argument("--augment", action="store_true",
+                    help="Apply data augmentation to tiles")
+    parser.add_argument("--augment_factor", type=int, default=10,
+                    help="Target dataset size increase factor (default: 10)")
 
     parser.add_argument("--dataset_name", type=str, required=True)
     parser.add_argument("--dataset_path", type=str, required=True)
@@ -111,12 +121,12 @@ def tiles_creation(args):
                         if fg_ratio < args.fg_threshold:
                             continue
 
-                    img_name = f"{name}_{tile_id:06d}.tif"
+                    #  aug00 is the original tile without augmentation, aug01, aug02, ... are the augmented versions
+                    img_name = f"{name}_{tile_id:06d}_aug00.tif"
                     img_tile.save(f"{out_img_dir}/{img_name}")
 
                     if has_gt:
                         mask_tile.save(f"{out_gt_dir}/{img_name}")
-
                     if args.save_stats:
                         stats.append({
                             "split": split,
@@ -124,6 +134,28 @@ def tiles_creation(args):
                             "tile_id": tile_id,
                             "fg_ratio": fg_ratio
                         })
+                    # Augmentation
+                    if args.augment:
+                        augmented_pairs = apply_augmentations(
+                            img_tile,
+                            mask_tile if has_gt else None,
+                            args.augment_factor
+                        )
+                        for aug_id, (aug_img, aug_mask) in enumerate(augmented_pairs):
+                            aug_name = f"{name}_{tile_id:06d}_aug{aug_id}.tif"
+                            aug_img.save(f"{out_img_dir}/{aug_name}")
+                            if has_gt:
+                                aug_mask.save(f"{out_gt_dir}/{aug_name}")
+                            if args.save_stats:
+                                stats.append({
+                                    "split": split,
+                                    "image": name,
+                                    "tile_id": tile_id,
+                                    "fg_ratio": fg_ratio,
+                                    "augmented": True,
+                                    "aug_id": aug_id
+                                })
+                    
 
                     tile_id += 1
 
@@ -134,13 +166,41 @@ def tiles_creation(args):
         stats_path = f"{out_root}/tile_statistics.csv"
         with open(stats_path, "w", newline="") as f:
             writer = csv.DictWriter(
-                f, fieldnames=["split", "image", "tile_id", "fg_ratio"]
+                f, fieldnames=["split", "image", "tile_id", "fg_ratio", "augmented", "aug_id"]
             )
             writer.writeheader()
             writer.writerows(stats)
 
         print(f"\nTile statistics saved to: {stats_path}")
 
+# --------------------------------------------------
+# Data Augmentation
+# --------------------------------------------------
+def apply_augmentations(img, mask=None, augment_factor=10):
+    """
+    Applies random augmentations to an image and its mask.
+    Returns a list of augmented (image, mask) pairs.
+    """
+    # Define augmentation pipeline
+    transform = A.Compose([
+        A.Rotate(limit=90, p=0.5),  # Rotate by -90 to +90 degrees (randomly)
+        A.HorizontalFlip(p=0.5),   # 50% chance to flip horizontally
+        A.VerticalFlip(p=0.5),     # 50% chance to flip vertically
+        A.RandomBrightnessContrast(
+            brightness_limit=0.2,
+            contrast_limit=0.2,
+            p=0.5
+        ),
+    ])
+
+    augmented_pairs = []
+    for _ in range(augment_factor - 1):  # -1 because original is already in the dataset
+        augmented = transform(image=np.array(img), mask=np.array(mask) if mask is not None else None)
+        aug_img = Image.fromarray(augmented["image"])
+        aug_mask = Image.fromarray(augmented["mask"]) if mask is not None else None
+        augmented_pairs.append((aug_img, aug_mask))
+
+    return augmented_pairs
 
 # --------------------------------------------------
 # Entry point

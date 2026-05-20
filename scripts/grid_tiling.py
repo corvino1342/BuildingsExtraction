@@ -176,6 +176,7 @@ def generate_grid_in_pixels(bbox, screenshot_width, screenshot_height, tile_size
                     (int(y_max_pixel), int(x_max_pixel)),  # Top-right
                     (int(y_max_pixel), int(x_min_pixel)),  # Top-left
                 ],
+                "center_real": ((min_lat_tile + max_lat_tile) / 2, (min_lon_tile + max_lon_tile) / 2),
                 "bbox_real": tile_bbox_real,
             })
 
@@ -187,7 +188,7 @@ def generate_grid_in_pixels(bbox, screenshot_width, screenshot_height, tile_size
 
     return tiles
 
-def show_grid_overlay(base_img, tiles, threshold, tile_color = "white", background_color = "black", alpha= 0.7):
+def show_grid_overlay(base_img, tiles, threshold, alpha=1):
     """
     Overlays a grid on a base image, highlighting tiles with building sums > threshold.
 
@@ -195,17 +196,15 @@ def show_grid_overlay(base_img, tiles, threshold, tile_color = "white", backgrou
         base_img: Base image (NumPy array, RGB format).
         tiles: List of tiles from `generate_grid_in_pixels`.
         threshold: Building sum threshold to highlight tiles.
-        tile_color: Color for tiles above threshold (default: "white").
-        background_color: Color for tiles below threshold (default: "black").
         alpha: Transparency of the overlay (0.0 to 1.0).
     """
 
 
     print(base_img.shape, len(tiles), "tiles to overlay.")
 
-    # Create a blank mask (black background)
+    # Create a blank mask (transparent background)
     mask = np.zeros_like(base_img, dtype=np.uint8)
-    mask[:] = [0, 0, 0, 0]  # Black background
+    mask[:] = [0, 0, 0, 0]  # transparent background
 
     # Highlight tiles above threshold
     for tile in tiles:
@@ -223,16 +222,17 @@ def show_grid_overlay(base_img, tiles, threshold, tile_color = "white", backgrou
     ax.imshow(mask, alpha=alpha)
 
     # Draw grid lines for clarity
-    for tile in tiles:
-        y_min, x_min = tile["bbox_pixel"][0]
-        y_max, x_max = tile["bbox_pixel"][2]
-        ax.plot([x_min, x_max], [y_min, y_min], color="red", linewidth=0.1)  # Bottom
-        ax.plot([x_min, x_max], [y_max, y_max], color="red", linewidth=0.1)  # Top
-        ax.plot([x_min, x_min], [y_min, y_max], color="red", linewidth=0.1)  # Left
-        ax.plot([x_max, x_max], [y_min, y_max], color="red", linewidth=0.1)  # Right
+    # for tile in tiles:
+    #     y_min, x_min = tile["bbox_pixel"][0]
+    #     y_max, x_max = tile["bbox_pixel"][2]
+    #     ax.plot([x_min, x_max], [y_min, y_min], color="red", linewidth=0.1)  # Bottom
+    #     ax.plot([x_min, x_max], [y_max, y_max], color="red", linewidth=0.1)  # Top
+    #     ax.plot([x_min, x_min], [y_min, y_max], color="red", linewidth=0.1)  # Left
+    #     ax.plot([x_max, x_max], [y_min, y_max], color="red", linewidth=0.1)  # Right
 
-    ax.set_title(f"Grid Overlay (Threshold={threshold})")
-    ax.axis("off")
+    # ax.set_title(f"Grid Overlay (Threshold={threshold})")
+    # ax.axis("off")
+    plt.savefig(f"grid_overlay_threshold_{threshold}.png", bbox_inches='tight')
     plt.show()
 
 def generate_grid_from_antenna(antenna_lon, antenna_lat, tile_size_meters, grid_radius_km, output_file=None):
@@ -571,30 +571,53 @@ def download_google_earth_rgb(bbox, output_file="caltanissetta.png"):
     return img
 
 
-# Example usage:
-bbox = [14.046683, 37.531238, 14.062496, 37.540893]  # Caltanissetta, Italy (as [min_lon, min_lat, max_lon, max_lat])
+def save_tile_centers_to_txt(tiles, threshold, building_height, output_file="tile_centers"):
+    """
+    Saves the centers of tiles with building_sum > threshold to a text file.
+    Format: lat, lon, {building_height} meters
 
-# generate_grid_from_bbox(bbox=bbox, tile_size_meters=30, output_file="grid_tiles.json")
+    Args:
+        tiles: List of tiles with 'center' and 'building_sum'.
+        threshold: Building sum threshold to filter tiles.
+        building_height: Height of buildings in the mask.
+        output_file: Path to save the text file.
+    """
 
-# print(scale_meters_pixels(bbox, Image.open("/home/unet/Projects/BuildingsExtraction/uscita_tunnel.png")))
+    with open(f"{output_file}.txt", "w") as f:
+        for tile in tiles:
+            if tile["building_sum"] > threshold:
+                lat, lon = tile["center_real"]
+                f.write(f"{lon}, -{lat}, {building_height} meters\n")
 
-screenshot_height, screenshot_width = Image.open("/home/unet/Projects/BuildingsExtraction/uscita_tunnel.png").size
+    print(f"✅ Saved centers of {sum(1 for t in tiles if t['building_sum'] > threshold)} tiles to {output_file}.txt")
 
 
-# Define your screenshot's real-world bbox and dimensions
-tile_size_meters = 30  # 30m tiles
+# [min_lon, min_lat, max_lon, max_lat]
+image = {"stazione_caltanissetta": [14.046683, 37.531238, 14.062496, 37.540893],
+        "uscita_tunnel": [14.053819, 37.486517, 14.060519, 37.491406]}
+
+name_image = "stazione_caltanissetta"
+bbox = image[name_image]
+
+# Define your real-world bbox and dimensions
+tile_size_meters = 30
+
+threshold = 100  # Minimum number of building pixels to consider a tile as "building-rich"
+image_height, image_width = Image.open(f"/home/unet/Projects/BuildingsExtraction/{name_image}.png").size
+building_height = 100  
 
 # Generate the grid in pixel coordinates
 tiles = generate_grid_in_pixels(
     bbox=bbox,
-    screenshot_width=screenshot_width,
-    screenshot_height=screenshot_height,
+    screenshot_width=image_width,
+    screenshot_height=image_height,
     tile_size_meters=tile_size_meters,
     output_file="tiles.json"
 )
 
-# Load your building mask (same size as screenshot)
-mask = np.load("/home/unet/Projects/BuildingsExtraction/experiments/example/uscita_tunnel.npy")  # Or load from image
+
+# Load your building mask
+mask = np.load(f"/home/unet/Projects/BuildingsExtraction/experiments/example/{name_image}.npy")
 
 # Compute building sums for each tile
 tiles = compute_tile_stats(mask, tiles)
@@ -603,17 +626,12 @@ print(len(tiles), "tiles generated and stats computed.")
 
 # Print stats for the first 3 tiles
 for i, tile in enumerate(tiles[:3]):
-    print(f"Tile {i}:")
+    print(f"\nTile {i}:")
     print(f"  Center Pixel: {tile['center_pixel']}")
     print(f"  Real-world Bbox: {tile['bbox_real']}")
     print(f"  Building Pixel Sum: {tile['building_sum']}")
 
 
-show_grid_overlay(
-    base_img=np.array(Image.open("/home/unet/Projects/BuildingsExtraction/uscita_tunnel.png")),
-    tiles=tiles,
-    threshold=100,
-    tile_color="white",
-    background_color="black",
-    alpha=0.7
-)
+show_grid_overlay( base_img=np.array(Image.open(f"/home/unet/Projects/BuildingsExtraction/{name_image}.png")), tiles=tiles, threshold=threshold, alpha=1)
+
+save_tile_centers_to_txt(tiles=tiles, threshold=threshold, building_height=building_height, output_file=name_image)
