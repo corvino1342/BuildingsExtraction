@@ -97,7 +97,7 @@ def tiles_creation(args):
 
         for name in tqdm(image_names, desc=f"Tiling {split}"):
 
-            img = Image.open(f"{image_dir}/{name}.tiff")
+            img = Image.open(f"{image_dir}/{name}.tif")
             if has_gt:
                 mask = Image.open(f"{gt_dir}/{name}.tif")
 
