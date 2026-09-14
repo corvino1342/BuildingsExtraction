@@ -16,7 +16,6 @@ class MyDataset(Dataset):
         self.images = sorted(os.listdir(images_dir))
         self.masks = sorted(os.listdir(masks_dir))
 
-        print(len(self.images), len(self.masks))
         assert len(self.images) == len(self.masks), \
             "Number of images and masks must match"
 

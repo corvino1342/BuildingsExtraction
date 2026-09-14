@@ -1,278 +1,146 @@
-import math
+import argparse
 import os
-from torchvision import transforms
 import numpy as np
+import torch
+from pathlib import Path
+from PIL import Image
+import rasterio
+from rasterio.errors import NotGeoreferencedWarning
+import warnings
 import json
 import matplotlib.pyplot as plt
-from PIL import Image
-import torch
-from src.models.factory import build_model
+from typing import List, Dict, Tuple
 
-def infer_model(runs_path, model_path, arch, img_tensor, infer, map_name, device="cuda"):
-    """Run inference on the input image and save probability maps."""
-    model = build_model(arch).to(device)
-    model.load_state_dict(torch.load(model_path, map_location=device))
-    model.eval()
+# Ignora warning su file non georiferiti
+warnings.filterwarnings("ignore", category=NotGeoreferencedWarning)
 
-    with torch.no_grad():
-        logits = model(img_tensor)
-        probs = torch.sigmoid(logits)
+# Importa il modello (adatta il percorso)
+from src.models.unet import UNetLL
 
-    os.makedirs(f"{runs_path}/experiments/{infer}", exist_ok=True)
-    probs.path = f"{runs_path}/experiments/{infer}/{map_name}.npy"
-    np.save(probs.path, probs.squeeze().cpu().numpy())
+### Funzioni di supporto da `grid_tiling.py` e `infer_probability_maps.py`
 
-    print("Saved probability maps.")
-
-    return probs
-
-def generate_grid_in_pixels(bbox, image_width, image_height, tile_size_meters, output_file):
-    """
-    Generates a grid of tiles in pixel coordinates, covering the input bbox.
-    Returns a list of dictionaries, where each dictionary contains:
-    - center_pixel: (row, col) of the tile center in pixel coordinates.
-    - bbox_pixel: [(y1, x1), (y1, x2), (y2, x2), (y2, x1)] of the tile in pixel coordinates.
-    - bbox_real: Real-world bounding box [(min_lat, min_lon), ...] of the tile.
-
-    Args:
-        bbox: Real-world bounding box of the screenshot: [min_lon, min_lat, max_lon, max_lat]
-        image_width: Width of the image in pixels.
-        image_height: Height of the image in pixels.
-        screenshot_height: Height of the screenshot in pixels.
-        tile_size_meters: Size of each tile in meters.
-        output_file: Optional path to save the results to a JSON file.
-
-    Returns:
-        A list of tile dictionaries with pixel and real-world coordinates.
-    """
-    # Extract real-world bbox coordinates
+def scale_meters_pixels(bbox: Tuple[float, float, float, float], image: Image.Image) -> Tuple[float, float]:
+    """Converte metri in pixel per un bbox dato."""
     min_lat, min_lon, max_lat, max_lon = bbox
-
-    # Calculate meters per pixel
+    image_width, image_height = image.size
     meters_per_degree_lat = 111320
-    meters_per_degree_lon = 111320 * math.cos(math.radians((min_lat + max_lat) / 2))
-
+    meters_per_degree_lon = 111320 * np.cos(np.radians((min_lat + max_lat) / 2))
     scale_lat = (max_lat - min_lat) * meters_per_degree_lat / image_height
     scale_lon = (max_lon - min_lon) * meters_per_degree_lon / image_width
+    return scale_lat, scale_lon
 
-    # Calculate tile size in pixels
-    tile_size_pixels_lat = tile_size_meters / scale_lat
-    tile_size_pixels_lon = tile_size_meters / scale_lon
-
-    # Calculate the center of the screenshot in pixels
-    center_pixel_col = image_width // 2
-    center_pixel_row = image_height // 2
-
-    # Calculate the number of tiles needed to cover the bbox
-    n_tiles = int(math.ceil(max(max_lat - min_lat, max_lon - min_lon) * 111320 / tile_size_meters))
-
-    # Generate the grid in pixel coordinates
+def generate_grid_in_pixels(bbox: Tuple[float, float, float, float], image_width: int, image_height: int, tile_size_meters: float) -> List[Dict]:
+    """Genera una griglia di tile in coordinate pixel."""
+    scale_lat, scale_lon = scale_meters_pixels(bbox, Image.new("RGB", (image_width, image_height)))
+    tile_size_pixels_y = int(tile_size_meters / scale_lat)
+    tile_size_pixels_x = int(tile_size_meters / scale_lon)
     tiles = []
-    for i in range(-n_tiles, n_tiles + 1):
-        for j in range(-n_tiles, n_tiles + 1):
-            # Calculate the pixel coordinates of the tile's center
-            center_pixel_col_tile = center_pixel_col + i * tile_size_pixels_lon
-            center_pixel_row_tile = center_pixel_row + j * tile_size_pixels_lat
-
-            # Calculate the pixel coordinates of the tile's corners
-            x_min_pixel = center_pixel_col_tile - tile_size_pixels_lon / 2
-            y_min_pixel = center_pixel_row_tile - tile_size_pixels_lat / 2
-            x_max_pixel = center_pixel_col_tile + tile_size_pixels_lon / 2
-            y_max_pixel = center_pixel_row_tile + tile_size_pixels_lat / 2
-
-            # Convert pixel coordinates to real-world lat/lon
-            min_lon_tile = min_lon + (x_min_pixel / image_width) * (max_lon - min_lon)
-            max_lon_tile = min_lon + (x_max_pixel / image_width) * (max_lon - min_lon)
-            min_lat_tile = min_lat + (y_min_pixel / image_height) * (max_lat - min_lat)
-            max_lat_tile = min_lat + (y_max_pixel / image_height) * (max_lat - min_lat)
-
-            # Create the real-world bounding box for the tile
-            tile_bbox_real = [
-                (min_lat_tile, min_lon_tile),  # Bottom-left
-                (min_lat_tile, max_lon_tile),  # Bottom-right
-                (max_lat_tile, max_lon_tile),  # Top-right
-                (max_lat_tile, min_lon_tile),  # Top-left
-            ]
-
-            # Append the tile data
-            tiles.append({
-                "center_pixel": (int(center_pixel_row_tile), int(center_pixel_col_tile)),
-                "bbox_pixel": [
-                    (int(y_min_pixel), int(x_min_pixel)),  # Bottom-left
-                    (int(y_min_pixel), int(x_max_pixel)),  # Bottom-right
-                    (int(y_max_pixel), int(x_max_pixel)),  # Top-right
-                    (int(y_max_pixel), int(x_min_pixel)),  # Top-left
-                ],
-                "center_real": ((min_lat_tile + max_lat_tile) / 2, (min_lon_tile + max_lon_tile) / 2),
-                "bbox_real": tile_bbox_real,
-            })
-
-    # Save to file (if output_file is provided)
-    if output_file:
-        import json
-        with open(output_file, "w") as f:
-            json.dump(tiles, f, indent=4)
-
+    for y in range(0, image_height, tile_size_pixels_y):
+        for x in range(0, image_width, tile_size_pixels_x):
+            tile = {
+                "bbox_pixel": [(y, x), (y, x + tile_size_pixels_x), (y + tile_size_pixels_y, x + tile_size_pixels_x), (y + tile_size_pixels_y, x)],
+                "bbox_real": [
+                    (bbox[0] + (y / image_height) * (bbox[2] - bbox[0]), bbox[1] + (x / image_width) * (bbox[3] - bbox[1])),
+                    (bbox[0] + (y / image_height) * (bbox[2] - bbox[0]), bbox[1] + ((x + tile_size_pixels_x) / image_width) * (bbox[3] - bbox[1])),
+                    (bbox[0] + ((y + tile_size_pixels_y) / image_height) * (bbox[2] - bbox[0]), bbox[1] + ((x + tile_size_pixels_x) / image_width) * (bbox[3] - bbox[1])),
+                    (bbox[0] + ((y + tile_size_pixels_y) / image_height) * (bbox[2] - bbox[0]), bbox[1] + (x / image_width) * (bbox[3] - bbox[1]))
+                ]
+            }
+            tiles.append(tile)
     return tiles
 
-def compute_tile_stats(mask, tiles):
-    """
-    Computes the sum of building pixels for each tile in the mask.
+def get_bbox_from_json(image_path: str, metadata_path: str = "bbox_metadata.json") -> Tuple[float, float, float, float]:
+    """Legge il bbox da un file JSON in base al nome dell'immagine."""
+    with open(metadata_path, "r") as f:
+        metadata = json.load(f)
+    image_name = os.path.basename(image_path)
+    if image_name not in metadata:
+        raise ValueError(f"Bbox non trovato per {image_name} in {metadata_path}")
+    return tuple(metadata[image_name])
 
-    Args:
-        mask: Binary mask (same size as screenshot).
-        tiles: List of tiles from `generate_grid_in_pixels`.
+def load_model(model_path: str, device: torch.device) -> UNetLL:
+    """Carica il modello UNetLL."""
+    model = UNetLL(n_channels=3, n_classes=1)
+    state_dict = torch.load(model_path, map_location="cpu")
+    model.load_state_dict(state_dict)
+    model.to(device)
+    model.eval()
+    return model
 
-    Returns:
-        List of tiles with added `building_sum` field.
-    """
-    for tile in tiles:
-        y_min, x_min = tile["bbox_pixel"][0]
-        y_max, x_max = tile["bbox_pixel"][2]
-
-        # Extract the tile from the mask
-        tile_mask = mask[y_min:y_max, x_min:x_max]
-
-        # Sum the building pixels (1s)
-        tile["building_sum"] = int(np.sum(tile_mask))
-
-    return tiles
-
-def show_grid_overlay(base_img, tiles, threshold, alpha=1):
-    """
-    Overlays a grid on a base image, highlighting tiles with building sums > threshold.
-
-    Args:
-        base_img: Base image (NumPy array, RGB format).
-        tiles: List of tiles from `generate_grid_in_pixels`.
-        threshold: Building sum threshold to highlight tiles.
-        alpha: Transparency of the overlay (0.0 to 1.0).
-    """
+def predict(model: UNetLL, image_tensor: torch.Tensor) -> np.ndarray:
+    """Esegue inferenza e restituisce la mappa di probabilità."""
+    device = next(model.parameters()).device
+    image_tensor = image_tensor.to(device)
+    with torch.no_grad():
+        logits = model(image_tensor)
+    probs = torch.sigmoid(logits).squeeze().cpu().numpy()
+    return probs.astype(np.float32)
 
 
-    print(base_img.shape, len(tiles), "tiles to overlay.")
+### Funzione principale
 
-    # Create a blank mask (transparent background)
-    mask = np.zeros_like(base_img, dtype=np.uint8)
-    mask[:] = [0, 0, 0, 0]  # transparent background
+def main():
+    parser = argparse.ArgumentParser(description="Estrai edifici da una mappa usando inferenza per tile.")
+    parser.add_argument("--input", type=str, required=True, help="Percorso dell'immagine di input (es. mappa.png).")
+    parser.add_argument("--model", type=str, required=True, help="Percorso del modello addestrato (es. model.pth).")
+    parser.add_argument("--output_dir", type=str, required=True, help="Cartella di output per i risultati.")
+    parser.add_argument("--metadata_path", type=str, default="bbox_metadata.json", help="Percorso del file JSON con i bbox (default: bbox_metadata.json).")
+    parser.add_argument("--tile_size_meters", type=float, default=30, help="Dimensione del tile in metri (default: 30).")
+    parser.add_argument("--threshold", type=float, default=0.5, help="Soglia per la binarizzazione (default: 0.5).")
+    parser.add_argument("--device", type=str, default="cuda", help="Dispositivo per l'inferenza (cuda/cpu).")
+    args = parser.parse_args()
 
-    # Highlight tiles above threshold
-    for tile in tiles:
-        if tile["building_sum"] > threshold:
-            # Draw the tile in the mask
-            y_min, x_min = tile["bbox_pixel"][0]
-            y_max, x_max = tile["bbox_pixel"][2]
+    # Leggi il bbox dal JSON
+    bbox = get_bbox_from_json(args.input, args.metadata_path)
 
-            # Set the tile region to black with some transparency
-            mask[y_min:y_max, x_min:x_max] = [0, 0, 0, 200]  # black with some transparency
+    # Crea la cartella di output
+    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
-    # Overlay the mask on the base image
-    fig, ax = plt.subplots(figsize=(10, 10))
-    ax.imshow(base_img, alpha=alpha)
-    ax.imshow(mask, alpha=alpha)
+    # Carica l'immagine
+    image = Image.open(args.input).convert("RGB")
+    image_width, image_height = image.size
 
-    # Draw grid lines for clarity
-    # for tile in tiles:
-    #     y_min, x_min = tile["bbox_pixel"][0]
-    #     y_max, x_max = tile["bbox_pixel"][2]
-    #     ax.plot([x_min, x_max], [y_min, y_min], color="red", linewidth=0.1)  # Bottom
-    #     ax.plot([x_min, x_max], [y_max, y_max], color="red", linewidth=0.1)  # Top
-    #     ax.plot([x_min, x_min], [y_min, y_max], color="red", linewidth=0.1)  # Left
-    #     ax.plot([x_max, x_max], [y_min, y_max], color="red", linewidth=0.1)  # Right
+    # Genera la griglia di tile
+    tiles = generate_grid_in_pixels(args.bbox, image_width, image_height, args.tile_size_meters)
 
-    # ax.set_title(f"Grid Overlay (Threshold={threshold})")
-    # ax.axis("off")
-    plt.savefig(f"grid_overlay_threshold_{threshold}.png", bbox_inches='tight')
-    plt.show()
+    # Carica il modello
+    device = torch.device(args.device if torch.cuda.is_available() and args.device == "cuda" else "cpu")
+    model = load_model(args.model, device)
 
-def save_tile_centers_to_txt(tiles, threshold, building_height, output_file="tile_centers"):
-    """
-    Saves the centers of tiles with building_sum > threshold to a text file.
-    Format: lat, lon, {building_height} meters
+    # Transform per normalizzare l'immagine (adatta ai tuoi dati)
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+    ])
 
-    Args:
-        tiles: List of tiles with 'center' and 'building_sum'.
-        threshold: Building sum threshold to filter tiles.
-        building_height: Height of buildings in the mask.
-        output_file: Path to save the text file.
-    """
+    # Elabora ogni tile
+    for i, tile in enumerate(tiles):
+        y1, x1 = tile["bbox_pixel"][0]
+        y2, x2 = tile["bbox_pixel"][2]
+        tile_img = image.crop((x1, y1, x2, y2))
+        tile_tensor = transform(tile_img).unsqueeze(0)
 
-    with open(f"{output_file}.txt", "w") as f:
-        for tile in tiles:
-            if tile["building_sum"] > threshold:
-                lat, lon = tile["center_real"]
-                f.write(f"{lon}, -{lat}, {building_height} meters\n")
+        # Esegue inferenza
+        prob_map = predict(model, tile_tensor)
 
-    print(f"✅ Saved centers of {sum(1 for t in tiles if t['building_sum'] > threshold)} tiles to {output_file}.txt")
+        # Salva la mappa di probabilità per il tile
+        tile_output_dir = Path(args.output_dir) / f"tile_{i}"
+        tile_output_dir.mkdir(exist_ok=True)
+        np.save(tile_output_dir / "prob_map.npy", prob_map)
 
-############################################################################
-# MAIN EXECUTION
-############################################################################
+        # Binarizza la mappa (opzionale)
+        binary_map = (prob_map > args.threshold).astype(np.uint8)
+        Image.fromarray(binary_map * 255).save(tile_output_dir / "binary_mask.png")
 
-runs_path = "/home/unet/Projects/BuildingsExtraction/"
+        # Salva i metadati del tile
+        with open(tile_output_dir / "metadata.json", "w") as f:
+            json.dump({
+                "bbox_pixel": tile["bbox_pixel"],
+                "bbox_real": tile["bbox_real"],
+                "threshold": args.threshold
+            }, f, indent=2)
 
-map_name = "stazione_caltanissetta"
+    print(f"Elaborazione completata. Risultati salvati in {args.output_dir}")
 
-model = "unetLL_bce_dim256_n3425_bs16"
-
-image_path = f"/home/unet/Projects/BuildingsExtraction/{map_name}.png"
-
-model_path = f"{runs_path}/runs/MassachusettsBuildingDataset/{model}/best_model.pth"
-
-arch = "unetLL"
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-img = Image.open(image_path).convert("RGB")
-img_np = np.array(img)
-
-transform = transforms.ToTensor()
-img_tensor = transform(img).unsqueeze(0).to(device)
-
-print(f"Running {arch}...")
-p = infer_model(runs_path, model_path, arch, img_tensor, infer="example", map_name=map_name)
-
-
-
-# [min_lon, min_lat, max_lon, max_lat]
-image = {"stazione_caltanissetta": [14.046683, 37.531238, 14.062496, 37.540893],
-        "uscita_tunnel": [14.053819, 37.486517, 14.060519, 37.491406]}
-
-name_image = "uscita_tunnel"
-bbox = image[name_image]
-
-# Define your real-world bbox and dimensions
-tile_size_meters = 30
-
-threshold = 100  # Minimum number of building pixels to consider a tile as "building-rich"
-image_height, image_width = Image.open(f"/home/unet/Projects/BuildingsExtraction/{name_image}.png").size
-building_height = 100  
-
-# Generate the grid in pixel coordinates
-tiles = generate_grid_in_pixels(
-    bbox=bbox,
-    image_width=image_width,
-    image_height=image_height,
-    tile_size_meters=tile_size_meters,
-    output_file="tiles.json"
-)
-
-# Load your building mask
-mask = np.load(f"/home/unet/Projects/BuildingsExtraction/experiments/example/{name_image}.npy")
-
-# Compute building sums for each tile
-tiles = compute_tile_stats(mask, tiles)
-
-print(len(tiles), "tiles generated and stats computed.")
-
-# Print stats for the first 3 tiles
-for i, tile in enumerate(tiles[:3]):
-    print(f"\nTile {i}:")
-    print(f"  Center Pixel: {tile['center_pixel']}")
-    print(f"  Real-world Bbox: {tile['bbox_real']}")
-    print(f"  Building Pixel Sum: {tile['building_sum']}")
-
-show_grid_overlay(base_img=np.array(Image.open(f"/home/unet/Projects/BuildingsExtraction/{name_image}.png")), tiles=tiles, threshold=threshold, alpha=1)
-
-save_tile_centers_to_txt(tiles=tiles, threshold=threshold, building_height=building_height, output_file=name_image)
-
+if __name__ == "__main__":
+    main()

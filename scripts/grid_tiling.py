@@ -13,7 +13,7 @@ import math
 # from sentinelhub import SHConfig, BBox, CRS, DataCollection, MimeType, SentinelHubRequest
 from typing import Tuple, Optional
 
-import ee
+# import ee
 
 
 # caltanissetta - 37.536086 14.056348
@@ -520,7 +520,7 @@ def compute_tile_stats(mask, tiles):
 
     return tiles
 
-def show_grid_overlay(base_img, tiles, threshold, alpha=1):
+def show_grid_overlay(base_img, save_path, tiles, threshold, alpha=1):
     """
     Overlays a grid on a base image, highlighting tiles with building sums > threshold.
 
@@ -564,10 +564,10 @@ def show_grid_overlay(base_img, tiles, threshold, alpha=1):
 
     # ax.set_title(f"Grid Overlay (Threshold={threshold})")
     # ax.axis("off")
-    plt.savefig(f"grid_overlay_threshold_{threshold}.png", bbox_inches='tight')
+    plt.savefig(f"{save_path}", bbox_inches='tight')
     plt.show()
 
-def save_tile_centers_to_txt(tiles, threshold, building_height, output_file="tile_centers"):
+def save_tile_centers_to_txt(tiles, threshold, building_height, map_name, output_path="tile_centers"):
     """
     Saves the centers of tiles with building_sum > threshold to a text file.
     Format: lat, lon, {building_height} meters
@@ -579,13 +579,13 @@ def save_tile_centers_to_txt(tiles, threshold, building_height, output_file="til
         output_file: Path to save the text file.
     """
 
-    with open(f"{output_file}.txt", "w") as f:
+    with open(f"{output_path}/{map_name}.txt", "w") as f:
         for tile in tiles:
             if tile["building_sum"] > threshold:
                 lat, lon = tile["center_real"]
                 f.write(f"{lon}, -{lat}, {building_height} meters\n")
 
-    print(f"✅ Saved centers of {sum(1 for t in tiles if t['building_sum'] > threshold)} tiles to {output_file}.txt")
+    print(f"✅ Saved centers of {sum(1 for t in tiles if t['building_sum'] > threshold)} tiles to {output_path} as {map_name}.txt")
 
 ############################################################################
 # MAIN EXECUTION
@@ -593,16 +593,26 @@ def save_tile_centers_to_txt(tiles, threshold, building_height, output_file="til
 
 # [min_lon, min_lat, max_lon, max_lat]
 image = {"stazione_caltanissetta": [14.046683, 37.531238, 14.062496, 37.540893],
-        "uscita_tunnel": [14.053819, 37.486517, 14.060519, 37.491406]}
+        "uscita_tunnel": [14.053819, 37.486517, 14.060519, 37.491406],
+        "testing1": [14.051290, 37.486091, 14.062380, 37.491307],
+        "testing2": [14.053756, 37.487427, 14.059547, 37.490176],
+        "testing3": [14.048017, 37.531238, 14.062496, 37.535800],
+        "testing4": [14.038969, 37.536160, 14.058376, 37.538599],
+        "testing5": [14.046862, 37.532600, 14.061383, 37.540979]
+        }
 
-name_image = "uscita_tunnel"
-bbox = image[name_image]
+
+image_name = "testing4"
+
+bbox = image[image_name]
 
 # Define your real-world bbox and dimensions
 tile_size_meters = 30
 
-threshold = 100  # Minimum number of building pixels to consider a tile as "building-rich"
-image_height, image_width = Image.open(f"/home/unet/Projects/BuildingsExtraction/{name_image}.png").size
+threshold = 450  # Minimum number of building pixels to consider a tile as "building-rich"
+# image_height, image_width = Image.open(f"/home/unet/Projects/BuildingsExtraction/{name_image}.png").size
+image_height, image_width = Image.open(f"/home/antoniocorvino/Projects/BuildingsExtraction/experiments/thesis/{image_name}.png").size
+
 building_height = 100  
 
 # Generate the grid in pixel coordinates
@@ -611,11 +621,12 @@ tiles = generate_grid_in_pixels(
     image_width=image_width,
     image_height=image_height,
     tile_size_meters=tile_size_meters,
-    output_file="tiles.json"
+    output_file=f"/home/antoniocorvino/Projects/BuildingsExtraction/experiments/thesis/{image_name}.json"
 )
 
 # Load your building mask
-mask = np.load(f"/home/unet/Projects/BuildingsExtraction/experiments/example/{name_image}.npy")
+# mask = np.load(f"/home/unet/Projects/BuildingsExtraction/experiments/example/{name_image}.npy")
+mask = np.load(f"/home/antoniocorvino/Projects/BuildingsExtraction/experiments/thesis/{image_name}.npy")
 
 # Compute building sums for each tile
 tiles = compute_tile_stats(mask, tiles)
@@ -629,6 +640,8 @@ for i, tile in enumerate(tiles[:3]):
     print(f"  Real-world Bbox: {tile['bbox_real']}")
     print(f"  Building Pixel Sum: {tile['building_sum']}")
 
-show_grid_overlay(base_img=np.array(Image.open(f"/home/unet/Projects/BuildingsExtraction/{name_image}.png")), tiles=tiles, threshold=threshold, alpha=1)
+show_grid_overlay(base_img=np.array(Image.open(f"/home/antoniocorvino/Projects/BuildingsExtraction/experiments/thesis/{image_name}.png")),
+                save_path=f"/home/antoniocorvino/Projects/BuildingsExtraction/experiments/thesis/{image_name}_grid.png", tiles=tiles, threshold=threshold, alpha=1)
 
-save_tile_centers_to_txt(tiles=tiles, threshold=threshold, building_height=building_height, output_file=name_image)
+save_tile_centers_to_txt(tiles=tiles, threshold=threshold, building_height=building_height,
+                        output_path="/home/antoniocorvino/Projects/BuildingsExtraction/experiments/thesis/", map_name=image_name)

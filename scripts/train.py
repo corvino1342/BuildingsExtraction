@@ -115,8 +115,8 @@ def main():
     n_train = len(train_ds)
     n_val = len(val_ds)
 
-    print(f"Training tiles: {n_train}")
-    print(f"Validation tiles: {n_val}")
+    print(f"Training tiles:\t{n_train}")
+    print(f"Validation tiles:\t{n_val}")
 
     train_loader = DataLoader(
         train_ds,
@@ -181,7 +181,12 @@ def main():
         use_amp=(device.type == "cuda")
     )
 
-    for epoch in range(1, args.epochs + 1):
+    print("\nTraining started...\n")
+
+    # Wrap the epoch loop with tqdm
+    epoch_pbar = tqdm(range(1, args.epochs + 1), desc="Epochs", leave=True, unit="epoch")
+
+    for epoch in epoch_pbar:
         start = time.time()
 
         tr = trainer.train_one_epoch(train_loader)
@@ -190,12 +195,23 @@ def main():
         epoch_time = time.time() - start
         logger.log(epoch, tr, va, epoch_time)
 
-        print(
-            f"[{epoch}/{args.epochs}]\t"
-            f"TRAIN loss {tr['loss']:.4f} IoU {tr['iou']:.3f} | "
-            f"VAL loss {va['loss']:.4f} IoU {va['iou']:.3f} | "
-            f"Time {epoch_time:.1f}s"
-        )
+        # print(
+        #     f"[{epoch}/{args.epochs}]\t"
+        #     f"TRAIN loss {tr['loss']:.4f} IoU {tr['iou']:.3f} | "
+        #     f"VAL loss {va['loss']:.4f} IoU {va['iou']:.3f} | "
+        #     f"Time {epoch_time:.1f}s"
+        # )
+
+        # Update the epoch progress bar with metrics
+        epoch_pbar.set_postfix({
+            "train_loss": f"{tr['loss']:.4f}",
+            "train_iou": f"{tr['iou']:.3f}",
+            "val_loss": f"{va['loss']:.4f}",
+            "val_iou": f"{va['iou']:.3f}",
+            "time": f"{epoch_time:.1f}s",
+        })
+
+
 
         if va["loss"] < best_val:
             best_val = va["loss"]
