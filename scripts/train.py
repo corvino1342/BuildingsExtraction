@@ -75,7 +75,7 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     use_amp = device.type == "cuda"
-    scaler = torch.amp.GradScaler('cuda', enabled=use_amp)
+    scaler = torch.amp.GradScaler(enabled=use_amp)
     dataset_path = args.dataset_path
     output_dir = args.output_dir
     extra_dirs = ""
@@ -156,7 +156,7 @@ def main():
         "batch_size": args.batch_size,
         "epochs": args.epochs,
         "learning_rate": args.lr,
-        "dropout_rate": 0.2,
+        "dropout_rate": args.dropout_rate,
         "architecture": args.arch,
         "loss": args.loss,
         "num_workers": args.num_workers,
@@ -210,8 +210,6 @@ def main():
             "val_iou": f"{va['iou']:.3f}",
             "time": f"{epoch_time:.1f}s",
         })
-
-
 
         if va["loss"] < best_val:
             best_val = va["loss"]
