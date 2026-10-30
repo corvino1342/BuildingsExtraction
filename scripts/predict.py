@@ -102,7 +102,7 @@ def load_model(model_path, arch, in_channels, device):
 
     # load on CPU first to avoid CUDA OOM while loading, mirroring infer_probability_maps.py
     state_dict = torch.load(model_path, map_location="cpu")
-    model.load_state_dict(state_dict)
+    model.load_state_dict(state_dict, strict=False)
 
     if device.type == "cuda":
         try:

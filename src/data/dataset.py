@@ -4,14 +4,16 @@ import numpy as np
 from PIL import Image
 from torch.utils.data import Dataset
 import torch
+import random
 
 
 class MyDataset(Dataset):
-    def __init__(self, images_dir, masks_dir, extra_dirs=None, transform=None):
+    def __init__(self, images_dir, masks_dir, extra_dirs=None, transform=None, augment=False):
         self.images_dir = images_dir
         self.masks_dir = masks_dir
         self.extra_dirs = extra_dirs or []
         self.transform = transform
+        self.augment = augment
 
         self.images = sorted(os.listdir(images_dir))
         self.masks = sorted(os.listdir(masks_dir))
@@ -54,5 +56,15 @@ class MyDataset(Dataset):
 
         # ensure mask is binary (0 or 1)
         mask = (mask > 0).float()
+
+        if self.augment:
+            if random.random() < 0.5:                       # horizontal flip
+                image, mask = image.flip(-1), mask.flip(-1)
+            if random.random() < 0.5:                       # vertical flip
+                image, mask = image.flip(-2), mask.flip(-2)
+            k = random.randint(0, 3)                        # 0/90/180/270 deg
+            if k:
+                image = torch.rot90(image, k, dims=(-2, -1))
+                mask = torch.rot90(mask, k, dims=(-2, -1))
 
         return image, mask

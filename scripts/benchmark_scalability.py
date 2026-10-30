@@ -56,13 +56,8 @@ from torch.utils.data import DataLoader
 # These come straight from predict.py -- reusing the exact same dataset /
 # inference code path used in production (`predict.py raster`) so the
 # benchmark numbers are representative of the real pipeline.
-from predict import (
-    build_model,          # noqa: F401 (kept for parity with predict.py's public API)
-    resolve_device,
-    load_model,
-    predict_batch,
-    RasterWindowDataset,
-)
+from scripts.predict import build_model, resolve_device, load_model, predict_batch,  RasterWindowDataset         # noqa: F401 (kept for parity with predict.py's public API)
+
 
 
 # --------------------------------------------------

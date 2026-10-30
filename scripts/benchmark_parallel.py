@@ -21,8 +21,10 @@ same device -- useful to show the pipeline degrades gracefully rather than
 crashing, and to find the point of diminishing returns):
 
     python -m scripts.benchmark_parallel \
-        --input /data/orthophoto.tif \
-        --model_path runs/.../best_model.pth --arch unetLL --in_channels 3 \
+        --input experiments/example/images/austin16_000013.tif \
+        --model_path runs/InriaBuildingDataset/unetLL_tiles_BCEplusDL_n56000_dim256x256_bs32//best_model.pth \
+        --arch unetLL \
+        --in_channels 3 \
         --tile_size_px 256 --overlap 32 --batch_size 16 \
         --worker_counts 1 2 4 \
         --device cuda \
@@ -59,7 +61,7 @@ import torch
 import torch.multiprocessing as mp
 from torch.utils.data import DataLoader, Subset
 
-from predict import (
+from scripts.predict import (
     resolve_device,
     load_model,
     predict_batch,

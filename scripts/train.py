@@ -102,7 +102,8 @@ def main():
         f"{dataset_path}/{args.dataset_name}/tiles_{args.tile_size}/train/images",
         f"{dataset_path}/{args.dataset_name}/tiles_{args.tile_size}/train/gt",
         extra_dirs=train_extra_dirs,
-        transform=transform
+        transform=transform,
+        augment=True
     )
 
     val_ds = MyDataset(
