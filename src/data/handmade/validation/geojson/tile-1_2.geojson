@@ -1,0 +1,9 @@
+{
+"type": "FeatureCollection",
+"name": "tile-1_2",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:EPSG::3857" } },
+"features": [
+{ "type": "Feature", "properties": { "element": "way", "id": 1089621637, "bell_tower": "campanile", "building": "tower", "man_made": "tower", "tower:type": "bell_tower" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ 1761901.236659149406478, 4918105.763716301880777 ], [ 1761902.260798464762047, 4918113.068023018538952 ], [ 1761908.160731476731598, 4918112.249940396286547 ], [ 1761907.136592161376029, 4918104.931025681085885 ], [ 1761901.236659149406478, 4918105.763716301880777 ] ] ] } },
+{ "type": "Feature", "properties": { "element": "way", "id": 1089621638, "bell_tower": null, "building": "church", "man_made": null, "tower:type": null }, "geometry": { "type": "Polygon", "coordinates": [ [ [ 1761881.410657838918269, 4918103.426339297555387 ], [ 1761892.965620983624831, 4918101.556438094004989 ], [ 1761896.795011466601864, 4918125.193184124305844 ], [ 1761885.240048322360963, 4918127.077698456123471 ], [ 1761881.410657838918269, 4918103.426339297555387 ] ] ] } }
+]
+}

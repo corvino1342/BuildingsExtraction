@@ -1,0 +1,8 @@
+{
+"type": "FeatureCollection",
+"name": "tile-2_2",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:EPSG::3857" } },
+"features": [
+{ "type": "Feature", "properties": { "element": "way", "id": 764528492, "building": "ruins", "name": "Monastero di Santa Maria dell'Aspro", "wikidata": "Q86668653", "wikipedia": "it:Monastero di Santa Maria dell'Aspro" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ 1761807.79507857747376, 4918802.078413487412035 ], [ 1761814.886130141327158, 4918825.278550510294735 ], [ 1761825.305634479271248, 4918822.09364181291312 ], [ 1761832.196310959290713, 4918844.621779578737915 ], [ 1761872.026424765354022, 4918832.437293998897076 ], [ 1761858.044696721481159, 4918786.709083289839327 ], [ 1761807.79507857747376, 4918802.078413487412035 ] ] ] } }
+]
+}

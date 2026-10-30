@@ -1,0 +1,8 @@
+{
+"type": "FeatureCollection",
+"name": "tile-2_3",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:EPSG::3857" } },
+"features": [
+{ "type": "Feature", "properties": { "element": "way", "id": 760482697, "amenity": "bank", "building": "yes", "name": "Largo Raffaele Ferrara" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ 1672270.578667041612789, 4960870.426125375553966 ], [ 1672257.509758822387084, 4960853.758333050645888 ], [ 1672272.181667708791792, 4960842.299242286011577 ], [ 1672282.289477473124862, 4960854.521294754929841 ], [ 1672270.578667041612789, 4960870.426125375553966 ] ] ] } }
+]
+}
